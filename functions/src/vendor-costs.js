@@ -19,7 +19,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { logger } = require('firebase-functions');
 const { defineSecret } = require('firebase-functions/params');
 const sgMail = require('@sendgrid/mail');
-const fetch = require('node-fetch');
+const axios = require('axios');
 
 // Secrets
 const sendgridKey = defineSecret('SENDGRID_API_KEY');
@@ -74,25 +74,19 @@ async function uploadToGoogleDrive(params) {
   }
 
   try {
-    const response = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'uploadGuideInvoice',
-        guideId: params.guideId,
-        guideName: params.guideName,
-        month: params.month,
-        invoiceNumber: params.invoiceNumber,
-        pdfBase64: params.pdfBase64
-      })
+    const response = await axios.post(APPS_SCRIPT_URL, {
+      action: 'uploadGuideInvoice',
+      guideId: params.guideId,
+      guideName: params.guideName,
+      month: params.month,
+      invoiceNumber: params.invoiceNumber,
+      pdfBase64: params.pdfBase64
+    }, {
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Apps Script error: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
+    // Axios lanza error por defecto si status no es 2xx, pero Apps Script a veces devuelve 200 con {success: false}
+    const result = response.data;
 
     if (!result.success) {
       throw new Error(result.error || 'Upload failed');
@@ -255,7 +249,9 @@ async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = 
         }
 
         // salarioCalculado ya es NETO (sin IVA)
-        totalSalary += cost.salarioCalculado;
+        // Aseguramos que sea número
+        const salary = Number(cost.salarioCalculado) || 0;
+        totalSalary += salary;
 
         tours.push({
           shiftId: cost.shiftId || null,
@@ -263,7 +259,7 @@ async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = 
           slot: cost.slot,
           tourDescription: cost.tourDescription,
           numPax: cost.numPax,
-          salario: cost.salarioCalculado
+          salario: Number(cost.salarioCalculado) || 0
         });
       });
 
@@ -374,7 +370,7 @@ async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = 
 // FUNCTION: generateGuideInvoices (CRON día 1)
 // =========================================
 exports.generateGuideInvoices = onSchedule({
-  schedule: '5 0 1 * *',
+  schedule: '1 0 1 * *',
   timeZone: 'UTC',
   secrets: [sendgridKey]
 }, async () => {
