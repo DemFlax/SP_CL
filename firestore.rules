@@ -54,8 +54,8 @@ service cloud.firestore {
       allow read: if isManager() || 
                      (isGuide() && resource.data.guideId == request.auth.token.guideId);
       
-      allow create: if isGuide() && 
-                       request.resource.data.guideId == request.auth.token.guideId;
+      allow create: if isManager() || 
+                       (isGuide() && request.resource.data.guideId == request.auth.token.guideId);
       
       allow update: if isManager() ||
                        (isGuide() && 

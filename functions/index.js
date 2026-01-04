@@ -16,6 +16,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { logger } = require('firebase-functions');
 const sgMail = require('@sendgrid/mail');
 const axios = require('axios');
+const functions = require('firebase-functions/v1');
 
 initializeApp();
 
@@ -244,6 +245,16 @@ exports.onCreateGuide = onDocumentCreated({
     });
   }
 });
+
+// =========================================
+// SYNC CANCELLATIONS MODULE
+// =========================================
+const syncCancellations = require('./src/sync-cancellations');
+exports.syncCancellations = onSchedule(
+  syncCancellations.syncCancellationsParams,
+  syncCancellations.syncCancellationsJob
+);
+exports.manualSyncCancellations = syncCancellations.manualSyncCancellations;
 
 // =========================================
 // FUNCIÓN: onUpdateGuide (reactivación guías)
@@ -934,11 +945,10 @@ const appsScriptKey = defineSecret('APPS_SCRIPT_API_KEY');
 // =========================================
 // PROXY 1: Validate Tour
 // =========================================
-exports.proxyValidateTour = onCall({
-  cors: true,
-  secrets: [appsScriptUrl, appsScriptKey]
-}, async (request) => {
-  const { data, auth } = request;
+exports.proxyValidateTour = functions.runWith({
+  secrets: ['APPS_SCRIPT_URL', 'APPS_SCRIPT_API_KEY']
+}).https.onCall(async (data, context) => {
+  const auth = context.auth;
 
   // Validar autenticación
   if (!auth) {
@@ -957,20 +967,15 @@ exports.proxyValidateTour = onCall({
   }
 
   try {
-    const url = `${appsScriptUrl.value()}?fecha=${data.fecha}&slot=${data.slot}&apiKey=${appsScriptKey.value()}`;
+    const url = `${process.env.APPS_SCRIPT_URL}?fecha=${data.fecha}&slot=${data.slot}&apiKey=${process.env.APPS_SCRIPT_API_KEY}`;
 
     logger.info('Proxying validateTour', { fecha: data.fecha, slot: data.slot });
 
-    const response = await fetch(url, {
-      method: 'GET',
+    const response = await axios.get(url, {
       headers: { 'Content-Type': 'application/json' }
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const result = await response.json();
+    const result = response.data;
 
     if (result.error) {
       throw new Error(result.message || 'Apps Script error');
@@ -989,11 +994,10 @@ exports.proxyValidateTour = onCall({
 // =========================================
 // PROXY 2: Add Guide to Calendar Event
 // =========================================
-exports.proxyAddGuideToEvent = onCall({
-  cors: true,
-  secrets: [appsScriptUrl, appsScriptKey]
-}, async (request) => {
-  const { data, auth } = request;
+exports.proxyAddGuideToEvent = functions.runWith({
+  secrets: ['APPS_SCRIPT_URL', 'APPS_SCRIPT_API_KEY']
+}).https.onCall(async (data, context) => {
+  const auth = context.auth;
 
   if (!auth || auth.token.role !== 'manager') {
     throw new HttpsError('permission-denied', 'Manager only');
@@ -1004,20 +1008,15 @@ exports.proxyAddGuideToEvent = onCall({
   }
 
   try {
-    const url = `${appsScriptUrl.value()}?endpoint=addGuideToEvent&eventId=${data.eventId}&guideEmail=${encodeURIComponent(data.guideEmail)}&apiKey=${appsScriptKey.value()}`;
+    const url = `${process.env.APPS_SCRIPT_URL}?endpoint=addGuideToEvent&eventId=${data.eventId}&guideEmail=${encodeURIComponent(data.guideEmail)}&apiKey=${process.env.APPS_SCRIPT_API_KEY}`;
 
     logger.info('Proxying addGuideToEvent', { eventId: data.eventId, guideEmail: data.guideEmail });
 
-    const response = await fetch(url, {
-      method: 'GET',
+    const response = await axios.get(url, {
       headers: { 'Content-Type': 'application/json' }
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const result = await response.json();
+    const result = response.data;
 
     if (result.error) {
       throw new Error(result.message || 'Failed to add guide');
@@ -1036,11 +1035,10 @@ exports.proxyAddGuideToEvent = onCall({
 // =========================================
 // PROXY 3: Remove Guide from Calendar Event
 // =========================================
-exports.proxyRemoveGuideFromEvent = onCall({
-  cors: true,
-  secrets: [appsScriptUrl, appsScriptKey]
-}, async (request) => {
-  const { data, auth } = request;
+exports.proxyRemoveGuideFromEvent = functions.runWith({
+  secrets: ['APPS_SCRIPT_URL', 'APPS_SCRIPT_API_KEY']
+}).https.onCall(async (data, context) => {
+  const auth = context.auth;
 
   if (!auth || auth.token.role !== 'manager') {
     throw new HttpsError('permission-denied', 'Manager only');
@@ -1051,20 +1049,15 @@ exports.proxyRemoveGuideFromEvent = onCall({
   }
 
   try {
-    const url = `${appsScriptUrl.value()}?endpoint=removeGuideFromEvent&eventId=${data.eventId}&guideEmail=${encodeURIComponent(data.guideEmail)}&apiKey=${appsScriptKey.value()}`;
+    const url = `${process.env.APPS_SCRIPT_URL}?endpoint=removeGuideFromEvent&eventId=${data.eventId}&guideEmail=${encodeURIComponent(data.guideEmail)}&apiKey=${process.env.APPS_SCRIPT_API_KEY}`;
 
     logger.info('Proxying removeGuideFromEvent', { eventId: data.eventId, guideEmail: data.guideEmail });
 
-    const response = await fetch(url, {
-      method: 'GET',
+    const response = await axios.get(url, {
       headers: { 'Content-Type': 'application/json' }
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const result = await response.json();
+    const result = response.data;
 
     if (result.error) {
       throw new Error(result.message || 'Failed to remove guide');
@@ -1083,11 +1076,10 @@ exports.proxyRemoveGuideFromEvent = onCall({
 // =========================================
 // PROXY 4: Get Event Details
 // =========================================
-exports.proxyGetEventDetails = onCall({
-  cors: true,
-  secrets: [appsScriptUrl, appsScriptKey]
-}, async (request) => {
-  const { data, auth } = request;
+exports.proxyGetEventDetails = functions.runWith({
+  secrets: ['APPS_SCRIPT_URL', 'APPS_SCRIPT_API_KEY']
+}).https.onCall(async (data, context) => {
+  const auth = context.auth;
 
   if (!auth) {
     throw new HttpsError('unauthenticated', 'Authentication required');
@@ -1103,20 +1095,15 @@ exports.proxyGetEventDetails = onCall({
   }
 
   try {
-    const url = `${appsScriptUrl.value()}?endpoint=getEventDetails&eventId=${data.eventId}&apiKey=${appsScriptKey.value()}`;
+    const url = `${process.env.APPS_SCRIPT_URL}?endpoint=getEventDetails&eventId=${data.eventId}&apiKey=${process.env.APPS_SCRIPT_API_KEY}`;
 
     logger.info('Proxying getEventDetails', { eventId: data.eventId });
 
-    const response = await fetch(url, {
-      method: 'GET',
+    const response = await axios.get(url, {
       headers: { 'Content-Type': 'application/json' }
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const result = await response.json();
+    const result = response.data;
 
     if (result.error) {
       const error = new Error(result.message);
@@ -1142,11 +1129,10 @@ exports.proxyGetEventDetails = onCall({
 // =========================================
 // PROXY 5: Get Assigned Tours
 // =========================================
-exports.proxyGetAssignedTours = onCall({
-  cors: true,
-  secrets: [appsScriptUrl, appsScriptKey]
-}, async (request) => {
-  const { data, auth } = request;
+exports.proxyGetAssignedTours = functions.runWith({
+  secrets: ['APPS_SCRIPT_URL', 'APPS_SCRIPT_API_KEY']
+}).https.onCall(async (data, context) => {
+  const auth = context.auth;
 
   if (!auth || auth.token.role !== 'manager') {
     throw new HttpsError('permission-denied', 'Manager only');
@@ -1157,20 +1143,15 @@ exports.proxyGetAssignedTours = onCall({
   }
 
   try {
-    const url = `${appsScriptUrl.value()}?endpoint=getAssignedTours&startDate=${data.startDate}&endDate=${data.endDate}&apiKey=${appsScriptKey.value()}`;
+    const url = `${process.env.APPS_SCRIPT_URL}?endpoint=getAssignedTours&startDate=${data.startDate}&endDate=${data.endDate}&apiKey=${process.env.APPS_SCRIPT_API_KEY}`;
 
     logger.info('Proxying getAssignedTours', { startDate: data.startDate, endDate: data.endDate });
 
-    const response = await fetch(url, {
-      method: 'GET',
+    const response = await axios.get(url, {
       headers: { 'Accept': 'application/json' }
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const result = await response.json();
+    const result = response.data;
 
     if (result.error) {
       throw new Error(result.message || 'Error fetching assignments');

@@ -13,6 +13,7 @@ const i18n = {
     tourLabel: 'Tour',
     loadingDetails: 'Cargando detalles...',
     errorTitle: 'Error',
+    successTitle: 'Éxito',
     retryBtn: 'Reintentar',
     guestListTitle: 'Lista de Invitados',
     persons: 'personas',
@@ -77,6 +78,7 @@ const i18n = {
     tourLabel: 'Tour',
     loadingDetails: 'Loading details...',
     errorTitle: 'Error',
+    successTitle: 'Success',
     retryBtn: 'Retry',
     guestListTitle: 'Guest List',
     persons: 'persons',
@@ -322,7 +324,7 @@ async function loadCurrentTour() {
       renderGuests(guests);
       hideLoading();
 
-      if (userRole === 'guide') {
+      if (userRole === 'guide' || userRole === 'manager') {
         await renderVendorCostsForm(tour.fecha, tour.slot, guests);
       }
     }
@@ -692,7 +694,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
 
     if (now < minTime) {
       const hoursLeft = Math.ceil((minTime - now) / (1000 * 60 * 60));
-      showVendorToast(`${t('errorTimeRestriction')} ${hoursLeft}${t('hoursLabel')}`, 'error');
+      showResultModal(t('errorTitle'), `${t('errorTimeRestriction')} ${hoursLeft}${t('hoursLabel')}`, 'error');
       return;
     }
   }
@@ -700,7 +702,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
   // Validar PAX
   const numPax = parseInt(document.getElementById('numPaxInput').value);
   if (!numPax || numPax < 1 || numPax > 99) {
-    showVendorToast(t('errorPaxRequired'), 'error');
+    showResultModal(t('errorTitle'), t('errorPaxRequired'), 'error');
     return;
   }
 
@@ -726,12 +728,12 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
   }
 
   if (hasError) {
-    showVendorToast(errorMsg, 'error');
+    showResultModal(t('errorTitle'), errorMsg, 'error');
     return;
   }
 
   if (validVendors.length === 0) {
-    showVendorToast(t('errorMinVendors'), 'error');
+    showResultModal(t('errorTitle'), t('errorMinVendors'), 'error');
     return;
   }
 
@@ -871,7 +873,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
 
     await addDoc(collection(db, 'vendor_costs'), vendorCostDoc);
 
-    showVendorToast(t('costsSaved'), 'success');
+    showResultModal(t('successTitle'), t('costsSaved'), 'success');
 
     // Reset form
     vendorCards = {};
@@ -884,7 +886,7 @@ async function handleVendorCostsSubmit(e, fecha, slot) {
 
   } catch (error) {
     console.error('Error saving vendor costs:', error);
-    showVendorToast(`${t('errorSavingCosts')}: ${error.message}`, 'error');
+    showResultModal(t('errorTitle'), `${t('errorSavingCosts')}: ${error.message}`, 'error');
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = t('saveCostsBtn');
@@ -1098,11 +1100,65 @@ function showVendorToast(message, type = 'info') {
   }, 3500);
 }
 
+function showResultModal(title, message, type = 'success') {
+  const modalId = 'resultModal';
+  let modal = document.getElementById(modalId);
+
+  if (modal) modal.remove();
+
+  modal = document.createElement('div');
+  modal.id = modalId;
+  // Fondo oscuro con blur
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4';
+  modal.style.animation = 'fadeIn 0.2s ease-out';
+
+  const isSuccess = type === 'success';
+
+  // Iconos SVG grandes
+  const icon = isSuccess
+    ? `<div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-5">
+         <svg class="w-10 h-10 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+         </svg>
+       </div>`
+    : `<div class="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-5">
+         <svg class="w-10 h-10 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
+         </svg>
+       </div>`;
+
+  const btnClass = isSuccess
+    ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 focus:ring-emerald-500'
+    : 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 focus:ring-red-500';
+
+  modal.innerHTML = `
+    <div class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl max-w-sm w-full p-8 text-center border border-gray-100 dark:border-gray-700" style="animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)">
+      ${icon}
+      <h3 class="text-2xl font-extrabold text-gray-900 dark:text-white mb-2 tracking-tight">${title}</h3>
+      <p class="text-gray-500 dark:text-gray-300 mb-8 text-lg leading-relaxed">${message}</p>
+      <button onclick="document.getElementById('${modalId}').remove()" 
+        class="w-full py-3.5 px-6 rounded-2xl text-white font-bold text-lg shadow-lg hover:shadow-xl transform transition-all active:scale-95 focus:outline-none focus:ring-4 focus:ring-opacity-50 ${btnClass}">
+        ENTENDIDO
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
 const styleSheet = document.createElement('style');
 styleSheet.textContent = `
   @keyframes slideIn {
     from { opacity: 0; transform: translateX(100%); }
     to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
   }
 `;
 document.head.appendChild(styleSheet);

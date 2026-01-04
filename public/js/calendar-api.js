@@ -8,7 +8,7 @@
 
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js';
 
-const functions = getFunctions();
+const functions = getFunctions(undefined, 'us-central1');
 
 /**
  * Validate if a tour exists in Google Calendar for given date/slot
@@ -80,13 +80,13 @@ export async function getTourGuestDetails(eventId, options = {}) {
       notFoundError.code = 'NOT_FOUND';
       throw notFoundError;
     }
-    
+
     if (error.code === 'functions/unauthenticated') {
       const authError = new Error('Authentication required');
       authError.code = 'UNAUTHORIZED';
       throw authError;
     }
-    
+
     console.error('Error fetching tour details:', error);
     throw error;
   }

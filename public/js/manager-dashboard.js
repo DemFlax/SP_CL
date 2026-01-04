@@ -13,18 +13,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-// Auto dark mode detection
-if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-  document.documentElement.classList.add('dark');
-}
 
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-  if (e.matches) {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
-});
 
 let currentUser = null;
 let guidesUnsubscribe = null;
@@ -73,16 +62,16 @@ function initFilters() {
   const yearSelect = document.getElementById('year-select');
   const estadoFilter = document.getElementById('estado-filter');
   const guideFilter = document.getElementById('guide-filter');
-  
+
   const currentYear = new Date().getFullYear();
   for (let y = currentYear - 1; y <= currentYear + 1; y++) {
     yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
   }
-  
+
   const today = new Date();
   monthSelect.value = String(today.getMonth() + 1).padStart(2, '0');
   yearSelect.value = currentYear;
-  
+
   monthSelect.addEventListener('change', () => {
     openDate = null;
     loadCalendar();
@@ -93,7 +82,7 @@ function initFilters() {
   });
   estadoFilter.addEventListener('change', loadCalendar);
   if (guideFilter) guideFilter.addEventListener('change', loadCalendar);
-  
+
   loadCalendar();
 }
 
@@ -106,7 +95,7 @@ async function loadCalendar() {
 
   const month = monthSelect.value;
   const year = yearSelect.value;
-  
+
   if (!month || !year) return;
 
   const startDate = `${year}-${month}-01`;
@@ -480,13 +469,13 @@ async function handleShiftAction(event, docPath, guideId, actionValue = null) {
         }
       }
 
-      await updateDoc(shiftRef, { 
-        estado: 'ASIGNADO', 
+      await updateDoc(shiftRef, {
+        estado: 'ASIGNADO',
         eventId: tourExists.eventId,
         tourName: tourExists.summary,
-        updatedAt: serverTimestamp() 
+        updatedAt: serverTimestamp()
       });
-      
+
       try {
         const guideDoc = await getDoc(doc(db, 'guides', guideId));
         const guideEmail = guideDoc.data().email;
@@ -512,11 +501,10 @@ function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   const toastMessage = document.getElementById('toast-message');
   toastMessage.textContent = message;
-  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg ${
-    type === 'success' ? 'bg-emerald-500 dark:bg-emerald-600' :
-    type === 'error' ? 'bg-red-500 dark:bg-red-600' :
-    type === 'warning' ? 'bg-yellow-500 dark:bg-yellow-600' : 'bg-sky-500 dark:bg-sky-600'
-  } text-white max-w-xs sm:max-w-md z-50`;
+  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg ${type === 'success' ? 'bg-emerald-500 dark:bg-emerald-600' :
+      type === 'error' ? 'bg-red-500 dark:bg-red-600' :
+        type === 'warning' ? 'bg-yellow-500 dark:bg-yellow-600' : 'bg-sky-500 dark:bg-sky-600'
+    } text-white max-w-xs sm:max-w-md z-50`;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);
 }

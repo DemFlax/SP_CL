@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard Guía - Tours Madrid</title>
-  
+
   <!-- PWA Meta Tags -->
   <meta name="theme-color" content="#334155">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -12,7 +13,7 @@
   <meta name="apple-mobile-web-app-title" content="SFS">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
-  
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -21,6 +22,7 @@
   </script>
   <link rel="stylesheet" href="/css/styles.css">
 </head>
+
 <body class="bg-slate-50 dark:bg-slate-900">
   <!-- NAV -->
   <nav class="bg-slate-700 dark:bg-slate-800 text-white shadow-lg sticky top-0 z-50">
@@ -28,42 +30,66 @@
       <div class="flex justify-between items-center">
         <h1 id="page-title" class="text-lg sm:text-xl font-bold">Tours Calendar</h1>
         <div class="flex items-center gap-2">
-          <a href="/my-invoices.html" 
-             class="flex items-center gap-1.5 bg-slate-600 hover:bg-slate-500 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]">
+          <a href="/my-invoices.html"
+            class="flex items-center gap-1.5 bg-slate-600 hover:bg-slate-500 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <span class="hidden sm:inline">Facturas</span>
           </a>
-          <button id="lang-toggle" class="bg-slate-600 hover:bg-slate-500 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-bold transition-colors min-h-[44px]">EN</button>
-          <button id="logout-btn" class="bg-red-600 hover:bg-red-700 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]">Salir</button>
+          <!-- Theme Toggle -->
+          <button id="theme-toggle"
+            class="bg-slate-600 hover:bg-slate-500 px-3 sm:px-3 py-2.5 rounded-lg text-white transition-colors min-h-[44px] flex items-center justify-center">
+            <!-- Sun Icon (Show in Dark Mode) -->
+            <svg id="theme-icon-sun" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
+              </path>
+            </svg>
+            <!-- Moon Icon (Show in Light Mode) -->
+            <svg id="theme-icon-moon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+            </svg>
+          </button>
+
+          <button id="lang-toggle"
+            class="bg-slate-600 hover:bg-slate-500 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-bold transition-colors min-h-[44px]">EN</button>
+          <button id="logout-btn"
+            class="bg-red-600 hover:bg-red-700 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]">Salir</button>
         </div>
       </div>
     </div>
   </nav>
 
   <main class="container mx-auto p-3 sm:p-6 max-w-7xl">
-    
+
     <!-- Próximas Asignaciones -->
     <section class="mb-4 sm:mb-6">
-      <div class="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <button 
-          id="assignments-toggle" 
-          class="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group min-h-[60px]"
-        >
+      <div
+        class="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <button id="assignments-toggle"
+          class="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group min-h-[60px]">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+              <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <h2 id="upcoming-title" class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">Próximas Asignaciones</h2>
+            <h2 id="upcoming-title" class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">Próximas
+              Asignaciones</h2>
           </div>
-          <svg id="assignments-chevron" class="w-6 h-6 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-all duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          <svg id="assignments-chevron"
+            class="w-6 h-6 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-all duration-200"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        <div id="next-assignments" class="px-4 pb-4 sm:px-5 sm:pb-5 hidden border-t border-slate-200 dark:border-slate-700">
+        <div id="next-assignments"
+          class="px-4 pb-4 sm:px-5 sm:pb-5 hidden border-t border-slate-200 dark:border-slate-700">
           <p class="text-slate-500 dark:text-slate-400 text-sm sm:text-base py-3">Cargando...</p>
         </div>
       </div>
@@ -75,14 +101,17 @@
         <div class="flex items-center gap-3 mb-3">
           <div class="w-10 h-10 rounded-lg bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center">
             <svg class="w-5 h-5 text-sky-600 dark:text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </div>
-          <h2 id="calendar-title" class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">Calendario de Turnos</h2>
+          <h2 id="calendar-title" class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">Calendario de
+            Turnos</h2>
         </div>
-        
+
         <div class="grid grid-cols-3 gap-2 sm:gap-3">
-          <select id="month-select" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg px-3 py-3 text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all min-h-[44px]">
+          <select id="month-select"
+            class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg px-3 py-3 text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all min-h-[44px]">
             <option value="1">Enero</option>
             <option value="2">Febrero</option>
             <option value="3">Marzo</option>
@@ -96,9 +125,11 @@
             <option value="11">Noviembre</option>
             <option value="12">Diciembre</option>
           </select>
-          <select id="year-select" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg px-3 py-3 text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all min-h-[44px]">
+          <select id="year-select"
+            class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg px-3 py-3 text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all min-h-[44px]">
           </select>
-          <select id="estado-filter" class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg px-3 py-3 text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all min-h-[44px]">
+          <select id="estado-filter"
+            class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg px-3 py-3 text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:border-transparent transition-all min-h-[44px]">
             <option value="todos">📋 Todos</option>
             <option value="LIBRE">✅ Libres</option>
             <option value="ASIGNADO">⭐ Asignados</option>
@@ -106,31 +137,36 @@
           </select>
         </div>
       </div>
-      
-      <div id="calendar-grid" class="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-3 sm:p-5">
+
+      <div id="calendar-grid"
+        class="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-3 sm:p-5">
         <p class="text-slate-500 dark:text-slate-400 text-sm sm:text-base">Cargando calendario...</p>
       </div>
     </section>
   </main>
 
   <!-- Toast -->
-  <div id="toast" class="hidden fixed bottom-4 right-4 px-5 py-3 rounded-xl shadow-2xl text-white text-sm sm:text-base max-w-xs sm:max-w-md z-50 backdrop-blur-sm">
+  <div id="toast"
+    class="hidden fixed bottom-4 right-4 px-5 py-3 rounded-xl shadow-2xl text-white text-sm sm:text-base max-w-xs sm:max-w-md z-50 backdrop-blur-sm">
     <p id="toast-message"></p>
   </div>
-  
+
   <script type="module" src="/js/guide-dashboard.js"></script>
-  
+
   <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(() => {
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          window.location.reload();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(() => {
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload();
+          });
         });
-      });
-  }
+    }
   </script>
-<!-- Pull to Refresh iOS PWA -->
+  <!-- Pull to Refresh iOS PWA -->
   <script src="/js/pulltorefresh.js"></script>
+  <!-- Theme Logic -->
+  <script type="module" src="/js/theme-toggle.js"></script>
 </body>
+
 </html>

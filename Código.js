@@ -42,6 +42,10 @@ function doGet(e) {
     return handleUploadInvoice(e.parameter);
   }
 
+  if (endpoint === 'checkEventsStatus') { // NEW: Sync Cancellations
+    return checkEventsStatus(e);
+  }
+
   return validateTour(e);
 }
 
@@ -85,6 +89,13 @@ function doPost(e) {
 
     if (data.action === 'uploadInvoice') {
       return handleUploadInvoice(data);
+    }
+
+    // ============================================
+    // SYNC CANCELLATIONS ENDPOINT
+    // ============================================
+    if (data.endpoint === 'checkEventsStatus') {
+      return checkEventsStatus(data);
     }
 
     return buildResponse({
@@ -1407,4 +1418,63 @@ function testUploadGuideInvoice() {
 
   Logger.log('=== TEST RESULT ===');
   Logger.log(result.getContent());
+}
+
+// ============================================
+// SYNC CANCELLATIONS: VERIFY EVENTS BATCH
+// ============================================
+function checkEventsStatus(params) {
+  try {
+    Logger.log('=== checkEventsStatus Request ===');
+
+    const apiKey = params.apiKey;
+    const storedKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
+
+    if (!apiKey || apiKey !== storedKey) {
+      Logger.log('ERROR: Invalid API Key');
+      return buildResponse({
+        error: true,
+        code: 'UNAUTHORIZED',
+        message: 'Invalid API key'
+      });
+    }
+
+    const eventIds = JSON.parse(params.eventIds || '[]');
+    Logger.log('Checking ' + eventIds.length + ' events');
+
+    const results = {};
+
+    eventIds.forEach(function (eventId) {
+      try {
+        const event = Calendar.Events.get(CALENDAR_ID, eventId);
+
+        // Status can be: "confirmed", "tentative", "cancelled"
+        results[eventId] = event.status || 'unknown';
+
+      } catch (e) {
+        // If event not found (404), it might be deleted entirely or ID is wrong
+        if (e.toString().includes('Not Found') || e.toString().includes('404')) {
+          results[eventId] = 'NOT_FOUND';
+        } else {
+          results[eventId] = 'ERROR';
+          Logger.log('Error checking event ' + eventId + ': ' + e.toString());
+        }
+      }
+    });
+
+    Logger.log('Check complete');
+
+    return buildResponse({
+      success: true,
+      results: results
+    });
+
+  } catch (err) {
+    Logger.log('ERROR checkEventsStatus: ' + err.toString());
+    Logger.log('Stack: ' + err.stack);
+    return buildResponse({
+      error: true,
+      message: err.toString()
+    });
+  }
 }

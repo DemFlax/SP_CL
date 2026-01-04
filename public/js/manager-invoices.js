@@ -1,4 +1,7 @@
 import { auth, db } from './firebase-config.js';
+import { initMenu } from './manager-menu.js';
+
+initMenu();
 import {
   collection,
   query,

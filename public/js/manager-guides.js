@@ -1,4 +1,7 @@
 import { auth, db } from './firebase-config.js';
+import { initMenu } from './manager-menu.js';
+
+initMenu();
 import {
   collection,
   addDoc,
@@ -73,33 +76,44 @@ function loadGuides() {
 
 function createGuideCard(id, guide) {
   const card = document.createElement('div');
-  card.className = 'guide-card bg-white dark:bg-gray-800 p-4 sm:p-5 rounded-2xl shadow-lg hover:shadow-xl transition border border-gray-200 dark:border-gray-700';
+  card.className = 'guide-card bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-lg hover:shadow-xl transition-all border border-gray-200 dark:border-gray-700 flex flex-col gap-4';
   card.innerHTML = `
-    <div class="flex justify-between items-start gap-3">
+    <div class="flex items-start gap-3">
+      <svg class="w-6 h-6 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A10.97 10.97 0 0112 15c2.5 0 4.847.82 6.879 2.196M15 11a3 3 0 10-6 0 3 3 0 006 0z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4a9 9 0 100 18 9 9 0 000-18z" />
+      </svg>
       <div class="flex-1 min-w-0">
         <h3 class="font-bold text-lg sm:text-xl truncate text-gray-900 dark:text-white mb-2">${guide.nombre}</h3>
         <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <p class="truncate">📧 ${guide.email}</p>
-          <p>🆔 ${guide.dni}</p>
-          <p>📱 ${guide.telefono || 'Sin teléfono'}</p>
-          ${guide.cuenta_bancaria ? `<p class="truncate">🏦 ${guide.cuenta_bancaria}</p>` : ''}
+          ${guide.email ? `<p class="flex items-center gap-2 truncate"><svg class="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12H8m8 0l-3-3m3 3l-3 3m3-10H8m8 0l-3-3m3 3l-3 3m-5 8h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v11a2 2 0 002 2z"/></svg>${guide.email}</p>` : ''}
+          ${guide.dni ? `<p class="flex items-center gap-2"><svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>${guide.dni}</p>` : ''}
+          <p class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h2l1 5h10l1-5h2M5 21h14M10 9V7h4v2"/></svg>${guide.telefono || 'Sin tel?fono'}</p>
+          ${guide.cuenta_bancaria ? `<p class="flex items-center gap-2 truncate"><svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H9a2 2 0 00-2 2v2m10 0H7m10 0v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9m10 0H7"/></svg>${guide.cuenta_bancaria}</p>` : ''}
         </div>
       </div>
-      <div class="flex flex-col gap-2">
-        <button onclick="window.impersonateGuide('${id}')" class="bg-purple-500 hover:bg-purple-600 dark:bg-purple-600 dark:hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition whitespace-nowrap flex items-center justify-center gap-1">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-          </svg>
-          Ver como
-        </button>
-        <button onclick="window.editGuide('${id}')" class="bg-sky-500 hover:bg-sky-600 dark:bg-sky-600 dark:hover:bg-sky-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition whitespace-nowrap">
-          Editar
-        </button>
-        <button onclick="window.deleteGuide('${id}')" class="bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition whitespace-nowrap">
-          Eliminar
-        </button>
-      </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row gap-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+      <button onclick="window.impersonateGuide('${id}')" class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/40 rounded-lg text-purple-600 dark:text-purple-400 font-medium transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+        </svg>
+        <span class="hidden sm:inline">Ver como</span>
+      </button>
+      <button onclick="window.editGuide('${id}')" class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/20 dark:hover:bg-sky-900/40 rounded-lg text-sky-600 dark:text-sky-400 font-medium transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+        </svg>
+        <span class="hidden sm:inline">Editar</span>
+      </button>
+      <button onclick="window.deleteGuide('${id}')" class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded-lg text-red-600 dark:text-red-400 font-medium transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+        </svg>
+        <span class="hidden sm:inline">Eliminar</span>
+      </button>
     </div>
   `;
   return card;
@@ -255,8 +269,8 @@ function showToast(message, type = 'info') {
   const toastMessage = document.getElementById('toast-message');
   toastMessage.textContent = message;
   toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg ${type === 'success' ? 'bg-emerald-500 dark:bg-emerald-600' :
-      type === 'error' ? 'bg-red-500 dark:bg-red-600' :
-        type === 'warning' ? 'bg-yellow-500 dark:bg-yellow-600' : 'bg-sky-500 dark:bg-sky-600'
+    type === 'error' ? 'bg-red-500 dark:bg-red-600' :
+      type === 'warning' ? 'bg-yellow-500 dark:bg-yellow-600' : 'bg-sky-500 dark:bg-sky-600'
     } text-white max-w-xs sm:max-w-md z-50`;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);

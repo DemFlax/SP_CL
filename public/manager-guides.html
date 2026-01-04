@@ -1,73 +1,181 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestión Guías - Manager</title>
+  <link rel="stylesheet" href="/css/styles.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = { darkMode: 'class' }
   </script>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-  
-  <!-- NAV -->
+
+<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300 min-h-screen">
+
   <nav class="bg-gradient-to-r from-sky-600 to-blue-600 dark:from-gray-800 dark:to-gray-900 text-white shadow-xl">
     <div class="container mx-auto px-4 py-4">
-      <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div class="flex justify-between items-center">
         <div>
-          <h1 class="text-2xl font-bold">Tours Calendar</h1>
-          <p class="text-sky-100 dark:text-gray-400 text-sm">Manager Dashboard</p>
+          <h1 class="text-xl sm:text-2xl font-bold">Gestión de Guías</h1>
+          <p class="text-sky-100 dark:text-gray-400 text-xs sm:text-sm">Manager Dashboard</p>
         </div>
-        <div class="flex items-center gap-3">
-         
-          <button id="logout-btn" class="px-4 py-2.5 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition-colors">Salir</button>
+        <div class="flex items-center gap-2 sm:gap-3">
+          <button id="theme-toggle"
+            class="p-2 sm:p-2.5 bg-sky-700/50 hover:bg-sky-800/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 rounded-lg transition-colors">
+            <svg id="theme-icon-moon" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor"
+              viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+            </svg>
+            <svg id="theme-icon-sun" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor"
+              viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
+              </path>
+            </svg>
+          </button>
+
+          <button id="menu-toggle" class="md:hidden p-2 sm:p-2.5 bg-sky-700/50 hover:bg-sky-800/50 rounded-lg">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
+          <button id="logout-btn"
+            class="hidden md:block px-3 sm:px-4 py-2 sm:py-2.5 bg-red-600 hover:bg-red-700 rounded-lg font-semibold text-sm sm:text-base transition-colors">Salir</button>
         </div>
       </div>
-      
-      <!-- TABS -->
-      <div class="mt-6 flex flex-wrap gap-2">
+
+      <div class="hidden md:flex mt-6 gap-2 flex-wrap">
         <a href="/manager.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
           </svg>
-          <span class="font-medium">Calendario</span>
+          <span>Calendario</span>
         </a>
-        
-        <a href="/manager-assignments.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+        <a href="/manager-assignments.html"
+          class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01">
+            </path>
           </svg>
-          <span class="font-medium">Asignaciones</span>
+          <span>Asignaciones</span>
         </a>
-        
-        <a href="/manager-guides.html" class="flex items-center gap-2 px-4 py-2.5 bg-white/20 rounded-lg font-semibold">
+        <a href="/manager-guides.html"
+          class="flex items-center gap-2 px-4 py-2.5 bg-white/20 rounded-lg font-semibold">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
+            </path>
           </svg>
-          <span class="font-medium">Guías</span>
+          <span>Guías</span>
         </a>
-        
-        <a href="/manager-vendors.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+        <a href="/manager-vendors.html"
+          class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4">
+            </path>
           </svg>
-          <span class="font-medium">Vendors</span>
+          <span>Vendors</span>
+        </a>
+        <a href="/manager-invoices.html"
+          class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+            </path>
+          </svg>
+          <span>Facturas</span>
         </a>
       </div>
     </div>
   </nav>
 
+  <div id="mobile-menu" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 md:hidden">
+    <div class="absolute right-0 top-0 bottom-0 w-72 bg-sky-600 dark:bg-gray-800 shadow-xl">
+      <div class="p-4 border-b border-sky-700 dark:border-gray-700 flex justify-between items-center">
+        <h3 class="text-white font-bold text-lg">Menú</h3>
+        <button id="close-menu" class="text-white p-2">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="p-4 space-y-2">
+        <a href="/manager.html" class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg text-white font-medium">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+          Calendario
+        </a>
+        <a href="/manager-assignments.html"
+          class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg text-white font-medium">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01">
+            </path>
+          </svg>
+          Asignaciones
+        </a>
+        <a href="/manager-guides.html"
+          class="flex items-center gap-3 px-4 py-3 bg-white/20 rounded-lg text-white font-medium">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
+            </path>
+          </svg>
+          Guías
+        </a>
+        <a href="/manager-vendors.html"
+          class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg text-white font-medium">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4">
+            </path>
+          </svg>
+          Vendors
+        </a>
+        <a href="/manager-invoices.html"
+          class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg text-white font-medium">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+            </path>
+          </svg>
+          Facturas
+        </a>
+        <button id="logout-btn-mobile"
+          class="w-full flex items-center gap-3 px-4 py-3 bg-red-600 hover:bg-red-700 rounded-lg text-white font-semibold mt-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+          </svg>
+          Salir
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- MAIN -->
-  <main class="container mx-auto p-4 sm:p-6">
-    
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
     <!-- HEADER -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-      <div>
+      <div class="flex items-center gap-3">
         <h2 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Lista de Guías</h2>
-        <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">Total: <span id="guides-count">0</span></p>
+        <span
+          class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-sm font-semibold rounded-full">
+          <span id="guides-count">0</span> guías
+        </span>
       </div>
-      <button onclick="showCreateGuideModal()" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-colors flex items-center justify-center gap-2">
+      <button onclick="showCreateGuideModal()"
+        class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-colors flex items-center justify-center gap-2">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
         </svg>
@@ -76,74 +184,86 @@
     </div>
 
     <!-- GUIDES GRID -->
-    <div id="guides-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div id="guides-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <!-- Cards generated by JS -->
     </div>
 
   </main>
 
   <!-- MODAL CREATE/EDIT -->
-  <div id="guide-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+  <div id="guide-modal"
+    class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
     <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
       <h3 id="modal-title" class="text-xl font-bold text-gray-900 dark:text-white mb-4">Crear Guía</h3>
-      
+
       <form id="guide-form" class="space-y-4">
         <div>
           <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Nombre *</label>
-          <input type="text" id="nombre" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
+          <input type="text" id="nombre" required
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
         </div>
-        
+
         <div>
           <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Email *</label>
-          <input type="email" id="email" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
+          <input type="email" id="email" required
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
         </div>
-        
+
         <div>
           <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Teléfono *</label>
-          <input type="tel" id="telefono" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
+          <input type="tel" id="telefono" required
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
         </div>
-        
+
         <div>
           <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">DNI *</label>
-          <input type="text" id="dni" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
+          <input type="text" id="dni" required
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
         </div>
-        
+
         <div>
           <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Dirección</label>
-          <input type="text" id="direccion" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
+          <input type="text" id="direccion"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
         </div>
-        
+
         <div>
           <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Cuenta Bancaria</label>
-          <input type="text" id="cuenta_bancaria" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
+          <input type="text" id="cuenta_bancaria"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500">
         </div>
-        
+
         <div class="flex gap-3 pt-4">
-          <button type="button" onclick="closeGuideModal()" class="flex-1 px-4 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancelar</button>
-          <button type="submit" class="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition-colors">Guardar</button>
+          <button type="button" onclick="closeGuideModal()"
+            class="flex-1 px-4 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancelar</button>
+          <button type="submit"
+            class="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition-colors">Guardar</button>
         </div>
       </form>
     </div>
   </div>
 
   <!-- TOAST -->
-  <div id="toast" class="hidden fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg max-w-xs sm:max-w-md z-50">
+  <div id="toast"
+    class="hidden fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg max-w-xs sm:max-w-md z-50">
     <p id="toast-message" class="text-xs sm:text-base"></p>
   </div>
 
   <script type="module" src="/js/manager-guides.js"></script>
-    <script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/service-worker.js')
-    .then(() => {
-      // Forzar recarga si hay actualización
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload();
-      });
-    });
-}
-</script>
-<!-- Pull to Refresh iOS PWA -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(() => {
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload();
+          });
+        });
+    }
+  </script>
+  <!-- Pull to Refresh iOS PWA -->
   <script src="/js/pulltorefresh.js"></script>
+  <!-- Theme Logic -->
+  <script type="module" src="/js/theme-toggle.js"></script>
 </body>
+
 </html>

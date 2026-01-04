@@ -12,13 +12,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-  document.documentElement.classList.add('dark');
-}
 
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-  document.documentElement.classList.toggle('dark', e.matches);
-});
 
 const i18n = {
   es: {
@@ -98,7 +92,7 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
     const token = await user.getIdTokenResult(true);
-    
+
     if (IMPERSONATE_ID && token.claims.role === 'manager') {
       currentGuideId = IMPERSONATE_ID;
       showImpersonationBanner();
@@ -121,10 +115,10 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     guideName = guideDoc.data().nombre;
-    
+
     const bannerName = document.getElementById('impersonated-guide-name');
     if (bannerName) bannerName.textContent = guideName;
-    
+
     updateUILanguage();
     initLanguageToggle();
     initAssignmentsDropdown();
@@ -159,7 +153,7 @@ function updateUILanguage() {
   document.getElementById('page-title').textContent = `${t('pageTitle')} - ${guideName}`;
   document.getElementById('upcoming-title').textContent = t('upcomingAssignments');
   document.getElementById('calendar-title').textContent = t('calendarTitle');
-  
+
   const invoicesLink = document.querySelector('a[href="/my-invoices.html"]');
   if (invoicesLink) {
     const spanElement = invoicesLink.querySelector('span');
@@ -168,10 +162,10 @@ function updateUILanguage() {
 
   const monthSelect = document.getElementById('month-select');
   const currentMonth = monthSelect.value;
-  monthSelect.innerHTML = monthNames[lang].map((name, idx) => 
+  monthSelect.innerHTML = monthNames[lang].map((name, idx) =>
     `<option value="${idx + 1}" ${parseInt(currentMonth) === idx + 1 ? 'selected' : ''}>${name}</option>`
   ).join('');
-  
+
   const estadoFilter = document.getElementById('estado-filter');
   estadoFilter.options[0].text = t('allStates');
   estadoFilter.options[1].text = t('freeState');
@@ -196,7 +190,7 @@ function initAssignmentsDropdown() {
   const toggle = document.getElementById('assignments-toggle');
   const content = document.getElementById('next-assignments');
   const chevron = document.getElementById('assignments-chevron');
-  
+
   toggle.addEventListener('click', () => {
     const isHidden = content.classList.contains('hidden');
     content.classList.toggle('hidden');
@@ -223,40 +217,40 @@ async function loadUpcomingAssignments() {
   const assignments = [];
   snapshot.forEach(doc => assignments.push({ id: doc.id, ...doc.data() }));
   assignments.sort((a, b) => a.fecha.localeCompare(b.fecha));
-  
+
   const limitedAssignments = assignments.slice(0, 3);
   const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
 
   assignmentsList.innerHTML = '';
-  
+
   limitedAssignments.forEach(a => {
     const dateStr = new Date(a.fecha + 'T12:00:00').toLocaleDateString(locale, dateOptions);
     const slotStr = a.slot === 'MAÑANA' ? t('morning') : `${t('afternoon')} ${a.slot}`;
-    
+
     const card = document.createElement('div');
     card.className = 'assignment-card bg-blue-50 dark:bg-blue-900 p-2 sm:p-3 rounded mb-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors';
-    
+
     card.innerHTML = `
       <p class="font-semibold text-sm sm:text-base dark:text-white">${dateStr}</p>
       <p class="text-xs sm:text-sm text-gray-600 dark:text-gray-300">${slotStr}</p>
       ${a.tourName ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${a.tourName}</p>` : ''}
     `;
-    
+
     // ✅ EVENT LISTENER CON IMPERSONACIÓN
     card.addEventListener('click', () => {
       if (!a.eventId) return;
-      
+
       let url = `/tour-details.html?eventId=${a.eventId}&title=${encodeURIComponent(a.tourName || 'Tour')}&date=${a.fecha}&time=${a.slot}`;
-      
+
       if (IMPERSONATE_ID) {
         url += `&impersonate=${IMPERSONATE_ID}`;
       }
-      
+
       console.log('🚀 Navegando a:', url);
       window.location.href = url;
     });
-    
+
     assignmentsList.appendChild(card);
   });
 }
@@ -318,7 +312,7 @@ async function loadCalendar() {
 function renderCalendar(shiftsMap) {
   const calendarGrid = document.getElementById('calendar-grid');
   const estadoFilter = document.getElementById('estado-filter').value;
-  
+
   calendarGrid.innerHTML = '';
 
   const shiftsByDate = {};
@@ -511,9 +505,8 @@ function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   const toastMessage = document.getElementById('toast-message');
   toastMessage.textContent = message;
-  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg ${
-    type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
-  } text-white text-sm sm:text-base`;
+  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+    } text-white text-sm sm:text-base`;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);
 }

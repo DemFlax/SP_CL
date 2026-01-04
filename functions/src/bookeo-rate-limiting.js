@@ -48,7 +48,7 @@ const APP_URL =
 // Horarios fijos (para Bookeo)
 const SLOT_TIMES = {
   MAÑANA: "12:00",
-  T1: "18:15", // No se usa directamente para Bookeo, pero se mantiene por compat
+  T1: "17:15",
   T2: "18:15",
   T3: "19:15",
 };
@@ -86,6 +86,8 @@ exports.bookeoWebhookWorker = onTaskDispatched(
     const db = getFirestore();
 
     try {
+      let emailStatus = emailData ? "pending" : "not_requested";
+
       // 1. Llamada a Make
       const response = await axios.post(MAKE_WEBHOOK_URL, payload, {
         headers: { "Content-Type": "application/json" },
@@ -100,13 +102,21 @@ exports.bookeoWebhookWorker = onTaskDispatched(
 
       // 2. Email (si aplica)
       if (emailData) {
-        sgMail.setApiKey(sendgridKey.value());
-        await sgMail.send({
-          to: MANAGER_EMAIL,
-          from: { email: FROM_EMAIL, name: FROM_NAME },
-          subject: emailData.subject,
-          html: emailData.html,
-        });
+        try {
+          sgMail.setApiKey(sendgridKey.value());
+          await sgMail.send({
+            to: MANAGER_EMAIL,
+            from: { email: FROM_EMAIL, name: FROM_NAME },
+            subject: emailData.subject,
+            html: emailData.html,
+          });
+          emailStatus = "sent";
+        } catch (emailError) {
+          // No reintentamos toda la tarea si el email falla para evitar
+          // reenviar el bloqueo/desbloqueo a Bookeo múltiples veces.
+          emailStatus = "failed";
+          logger.error("Error enviando email de Bookeo", emailError);
+        }
       }
 
       // 3. Procesar respuesta
@@ -191,6 +201,7 @@ exports.bookeoWebhookWorker = onTaskDispatched(
         payload,
         responseStatus: response.status,
         responseData,
+        emailStatus,
         timestamp: FieldValue.serverTimestamp(),
       });
 
@@ -217,11 +228,9 @@ function mapStartTimeToSlot(startTime) {
 
   if (t === SLOT_TIMES["MAÑANA"]) return "MAÑANA";
 
-  // Todo lo que no sea MAÑANA lo compactamos como TARDE general (T2),
-  // porque tu trigger de tarde siempre usa bookeo_blocks/{fecha}_T2
-  if (t === SLOT_TIMES["T2"] || t === SLOT_TIMES["T1"] || t === SLOT_TIMES["T3"]) {
-    return "T2";
-  }
+  if (t === SLOT_TIMES["T1"]) return "T1";
+  // T3 (19:15) lo tratamos como parte del bloque T2 por ahora si llega callback
+  if (t === SLOT_TIMES["T2"] || t === SLOT_TIMES["T3"]) return "T2";
 
   return null;
 }
@@ -487,20 +496,26 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
               existingData.status === "BLOCKED_PENDING_ID");
 
           if (resultado.debeBloquear && !isBlocked) {
-            await enqueueWebhook({
-              action: "BLOQUEAR",
-              shiftId: `${fechaRaw}_MAÑANA`,
-              payload: {
-                date: dateForMake,
-                startTime: SLOT_TIMES["MAÑANA"],
-                accion: "bloquear",
+            // FIX: Verificar si existe tour antes de bloquear
+            const tieneTourMañana = await slotTieneTour(db, fechaRaw, "MAÑANA");
+            if (!tieneTourMañana) {
+              await enqueueWebhook({
+                action: "BLOQUEAR",
                 shiftId: `${fechaRaw}_MAÑANA`,
-              },
-              emailData: {
-                subject: `🚫 Bloqueo: ${fechaRaw} MAÑANA`,
-                html: generarEmail(fechaRaw, "MAÑANA"),
-              },
-            });
+                payload: {
+                  date: dateForMake,
+                  startTime: SLOT_TIMES["MAÑANA"],
+                  accion: "bloquear",
+                  shiftId: `${fechaRaw}_MAÑANA`,
+                },
+                emailData: {
+                  subject: `🚫 Bloqueo: ${fechaRaw} MAÑANA`,
+                  html: generarEmail(fechaRaw, "MAÑANA"),
+                },
+              });
+            } else {
+              logger.info("⏩ Bloqueo MAÑANA omitido - tour existente", { fecha: fechaRaw });
+            }
           } else if (resultado.debeDesbloquear && isBlocked) {
             if (realBookeoId && realBookeoId !== "Accepted") {
               await enqueueWebhook({
@@ -517,25 +532,45 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
                 .collection("bookeo_blocks")
                 .doc(`${fechaRaw}_MAÑANA_EMAIL_STATE`)
                 .delete()
-                .catch(() => {});
+                .catch(() => { });
             } else {
               logger.error(
                 "⚠️ No se puede desbloquear MAÑANA: ID inválido o pendiente",
                 { fecha: fechaRaw, id: realBookeoId }
               );
             }
+          } else if (resultado.debeBloquear && isBlocked) {
+            // FIX: Auto-desbloquear si está bloqueado pero tiene tour existente
+            const tieneTourMañana = await slotTieneTour(db, fechaRaw, "MAÑANA");
+            if (tieneTourMañana && realBookeoId && realBookeoId !== "Accepted") {
+              logger.info("🔓 Auto-desbloqueando MAÑANA - tour existente detectado", { fecha: fechaRaw });
+              await enqueueWebhook({
+                action: "DESBLOQUEAR",
+                shiftId: `${fechaRaw}_MAÑANA`,
+                payload: {
+                  accion: "desbloquear",
+                  blockId: realBookeoId,
+                  shiftId: `${fechaRaw}_MAÑANA`,
+                },
+                emailData: null,
+              });
+            }
           }
         }
       }
 
-      // --- LÓGICA TARDE ---
+      // --- LÓGICA TARDE (T1 + T2) ---
       else if (TARDE_SLOTS.includes(slot)) {
         const resultado = await calcularDisponibilidadTarde(db, fechaRaw);
+        const available = resultado.guidesDisponiblesTarde; // Cantidad de guías libres
+
+        // Usamos un hash único para el estado de "disponibilidad tarde"
         const stateHash = calculateStateHash({
           total: totalGuides,
-          available: resultado.guidesDisponiblesTarde,
+          available: available,
         });
 
+        // Verificamos si CAMBIÓ la situación general de la tarde
         if (
           await checkAndSetState(
             db,
@@ -544,57 +579,25 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
             resultado
           )
         ) {
-          const blockDocId = `${fechaRaw}_T2`;
-          const blockDoc = await db
-            .collection("bookeo_blocks")
-            .doc(blockDocId)
-            .get();
-          const existingData = blockDoc.exists ? blockDoc.data() : {};
-          const realBookeoId = existingData.bookeoId;
-          const isBlocked =
-            blockDoc.exists &&
-            (existingData.status === "BLOCKED" ||
-              existingData.status === "BLOCKED_PENDING_ID");
+          // Evaluar T2 (18:15) - Se abre si hay al menos 1 guía
+          const shouldBlockT2 = available < 1;
+          await processSlotBlocking(
+            db,
+            fechaRaw,
+            "T2",
+            dateForMake,
+            shouldBlockT2
+          );
 
-          if (resultado.debeBloquear && !isBlocked) {
-            await enqueueWebhook({
-              action: "BLOQUEAR",
-              shiftId: blockDocId,
-              payload: {
-                date: dateForMake,
-                startTime: SLOT_TIMES["T2"],
-                accion: "bloquear",
-                shiftId: blockDocId,
-              },
-              emailData: {
-                subject: `🚫 Bloqueo: ${fechaRaw} TARDE`,
-                html: generarEmail(fechaRaw, "TARDE"),
-              },
-            });
-          } else if (resultado.debeDesbloquear && isBlocked) {
-            if (realBookeoId && realBookeoId !== "Accepted") {
-              await enqueueWebhook({
-                action: "DESBLOQUEAR",
-                shiftId: blockDocId,
-                payload: {
-                  accion: "desbloquear",
-                  blockId: realBookeoId,
-                  shiftId: blockDocId,
-                },
-                emailData: null,
-              });
-              await db
-                .collection("bookeo_blocks")
-                .doc(`${fechaRaw}_TARDE_EMAIL_STATE`)
-                .delete()
-                .catch(() => {});
-            } else {
-              logger.error(
-                "⚠️ No se puede desbloquear TARDE: ID inválido o pendiente",
-                { fecha: fechaRaw, id: realBookeoId }
-              );
-            }
-          }
+          // Evaluar T1 (17:15) - Se abre si hay al menos 2 guías
+          const shouldBlockT1 = available < 2;
+          await processSlotBlocking(
+            db,
+            fechaRaw,
+            "T1",
+            dateForMake,
+            shouldBlockT1
+          );
         }
       }
     } catch (error) {
@@ -602,6 +605,84 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
     }
   }
 );
+
+async function processSlotBlocking(db, fechaRaw, slotName, dateForMake, shouldBlock) {
+  const shiftId = `${fechaRaw}_${slotName}`;
+  const blockDoc = await db.collection("bookeo_blocks").doc(shiftId).get();
+  const existingData = blockDoc.exists ? blockDoc.data() : {};
+  const realBookeoId = existingData.bookeoId;
+
+  // Estado actual
+  const isBlocked =
+    blockDoc.exists &&
+    (existingData.status === "BLOCKED" ||
+      existingData.status === "BLOCKED_PENDING_ID");
+
+  if (shouldBlock && !isBlocked) {
+    // FIX: Verificar si existe tour antes de bloquear
+    const tieneTour = await slotTieneTour(db, fechaRaw, slotName);
+    if (!tieneTour) {
+      // BLOQUEAR
+      await enqueueWebhook({
+        action: "BLOQUEAR",
+        shiftId: shiftId,
+        payload: {
+          date: dateForMake,
+          startTime: SLOT_TIMES[slotName],
+          accion: "bloquear",
+          shiftId: shiftId,
+        },
+        emailData: {
+          subject: `🚫 Bloqueo: ${fechaRaw} ${slotName}`,
+          html: generarEmail(fechaRaw, slotName),
+        },
+      });
+    } else {
+      logger.info(`⏩ Bloqueo ${slotName} omitido - tour existente`, { fecha: fechaRaw, slot: slotName });
+    }
+  } else if (!shouldBlock && isBlocked) {
+    // DESBLOQUEAR
+    if (realBookeoId && realBookeoId !== "Accepted") {
+      await enqueueWebhook({
+        action: "DESBLOQUEAR",
+        shiftId: shiftId,
+        payload: {
+          accion: "desbloquear",
+          blockId: realBookeoId,
+          shiftId: shiftId,
+        },
+        emailData: null,
+      });
+      // Limpiar estado email si existiera (aunque usamos el hash general)
+      await db
+        .collection("bookeo_blocks")
+        .doc(`${fechaRaw}_${slotName}_EMAIL_STATE`)
+        .delete()
+        .catch(() => { });
+    } else {
+      logger.error(
+        `⚠️ No se puede desbloquear ${slotName}: ID inválido o pendiente`,
+        { fecha: fechaRaw, id: realBookeoId }
+      );
+    }
+  } else if (shouldBlock && isBlocked) {
+    // FIX: Auto-desbloquear si está bloqueado pero tiene tour existente
+    const tieneTour = await slotTieneTour(db, fechaRaw, slotName);
+    if (tieneTour && realBookeoId && realBookeoId !== "Accepted") {
+      logger.info(`🔓 Auto-desbloqueando ${slotName} - tour existente detectado`, { fecha: fechaRaw, slot: slotName });
+      await enqueueWebhook({
+        action: "DESBLOQUEAR",
+        shiftId: shiftId,
+        payload: {
+          accion: "desbloquear",
+          blockId: realBookeoId,
+          shiftId: shiftId,
+        },
+        emailData: null,
+      });
+    }
+  }
+}
 
 // =========================================
 // HELPERS
@@ -640,6 +721,27 @@ async function checkAndSetEmailState(db, docId, valueToCheck) {
   });
 }
 
+/**
+ * Verifica si algún guía tiene un tour asignado en un slot específico.
+ * Si hay tour, no se debe bloquear ese slot en Bookeo porque ya existe reserva.
+ */
+async function slotTieneTour(db, fecha, slot) {
+  const guides = await db.collection("guides").where("estado", "==", "activo").get();
+  for (const doc of guides.docs) {
+    const shift = await db
+      .collection("guides")
+      .doc(doc.id)
+      .collection("shifts")
+      .doc(`${fecha}_${slot}`)
+      .get();
+    if (shift.exists && shift.data().estado === "ASIGNADO") {
+      logger.info("🔍 Tour detectado - NO se bloqueará", { fecha, slot, guideId: doc.id });
+      return true;
+    }
+  }
+  return false;
+}
+
 async function calcularDisponibilidadSlot(db, fecha, slot) {
   const snapshot = await db
     .collection("guides")
@@ -653,7 +755,7 @@ async function calcularDisponibilidadSlot(db, fecha, slot) {
       .collection("shifts")
       .doc(`${fecha}_${slot}`)
       .get();
-    if (shift.exists && shift.data().estado === "NO_DISPONIBLE")
+    if (shift.exists && (shift.data().estado === "NO_DISPONIBLE" || shift.data().estado === "ASIGNADO"))
       unavailableCount++;
   }
   return {
@@ -678,7 +780,7 @@ async function calcularDisponibilidadTarde(db, fecha) {
         .collection("shifts")
         .doc(`${fecha}_${s}`)
         .get();
-      if (shift.exists && shift.data().estado === "NO_DISPONIBLE") {
+      if (shift.exists && (shift.data().estado === "NO_DISPONIBLE" || shift.data().estado === "ASIGNADO")) {
         disp = false;
         break;
       }

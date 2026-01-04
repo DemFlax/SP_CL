@@ -1,4 +1,7 @@
 import { auth, db, appsScriptConfig } from './firebase-config.js';
+import { initMenu } from './manager-menu.js';
+
+initMenu();
 import {
   collection,
   addDoc,
@@ -42,25 +45,25 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 function loadVendors() {
   const vendorsQuery = query(collection(db, 'vendors'), where('estado', '==', 'activo'));
   if (vendorsUnsubscribe) vendorsUnsubscribe();
-  
+
   vendorsUnsubscribe = onSnapshot(vendorsQuery, (snapshot) => {
     const vendorsList = document.getElementById('vendors-list');
     vendorsList.innerHTML = '';
-    
+
     if (snapshot.empty) {
       vendorsList.innerHTML = '<div class="col-span-full text-center py-12"><p class="text-gray-500 dark:text-gray-400">No hay vendors registrados</p><button onclick="showCreateVendorModal()" class="mt-4 bg-emerald-600 text-white px-4 py-2 rounded-lg">Crear primer vendor</button></div>';
       updateVendorCount();
       return;
     }
-    
+
     const vendors = snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => a.orden - b.orden);
-    
+
     vendors.forEach(vendor => {
       vendorsList.appendChild(createVendorCard(vendor));
     });
-    
+
     updateVendorCount();
   });
 }
@@ -70,12 +73,12 @@ function createVendorCard(vendor) {
   card.className = 'bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-lg hover:shadow-xl transition-all border border-gray-200 dark:border-gray-700';
   card.draggable = true;
   card.dataset.vendorId = vendor.id;
-  
+
   card.addEventListener('dragstart', handleDragStart);
   card.addEventListener('dragover', handleDragOver);
   card.addEventListener('drop', handleDrop);
   card.addEventListener('dragend', handleDragEnd);
-  
+
   card.innerHTML = `
     <div class="flex items-start gap-3 mb-3">
       <svg class="w-6 h-6 text-gray-400 cursor-move flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,7 +115,7 @@ function createVendorCard(vendor) {
       </button>
     </div>
   `;
-  
+
   return card;
 }
 
@@ -130,12 +133,12 @@ function handleDragOver(e) {
 
 function handleDrop(e) {
   if (e.stopPropagation) e.stopPropagation();
-  
+
   const targetVendorId = this.dataset.vendorId;
   if (draggedVendor !== targetVendorId) {
     reorderVendors(draggedVendor, targetVendorId);
   }
-  
+
   return false;
 }
 
@@ -149,18 +152,18 @@ async function reorderVendors(draggedId, targetId) {
     const vendors = vendorsSnapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => a.orden - b.orden);
-    
+
     const draggedIndex = vendors.findIndex(v => v.id === draggedId);
     const targetIndex = vendors.findIndex(v => v.id === targetId);
-    
+
     const [removed] = vendors.splice(draggedIndex, 1);
     vendors.splice(targetIndex, 0, removed);
-    
+
     const batch = writeBatch(db);
     vendors.forEach((vendor, index) => {
       batch.update(doc(db, 'vendors', vendor.id), { orden: index });
     });
-    
+
     await batch.commit();
   } catch (error) {
     console.error('Error reordering:', error);
@@ -169,37 +172,37 @@ async function reorderVendors(draggedId, targetId) {
 }
 
 // MODAL VENDOR
-window.showCreateVendorModal = function() {
+window.showCreateVendorModal = function () {
   editingVendorId = null;
   document.getElementById('modal-title').textContent = 'Crear Vendor';
   document.getElementById('vendor-form').reset();
   document.getElementById('vendor-modal').classList.remove('hidden');
 };
 
-window.closeVendorModal = function() {
+window.closeVendorModal = function () {
   document.getElementById('vendor-modal').classList.add('hidden');
   editingVendorId = null;
 };
 
-window.editVendor = async function(vendorId) {
+window.editVendor = async function (vendorId) {
   editingVendorId = vendorId;
   const vendorDoc = await getDocs(query(collection(db, 'vendors'), where('__name__', '==', vendorId)));
   const vendor = vendorDoc.docs[0].data();
-  
+
   document.getElementById('modal-title').textContent = 'Editar Vendor';
   document.getElementById('nombre').value = vendor.nombre;
   document.getElementById('cif').value = vendor.cif || '';
   document.getElementById('direccion').value = vendor.direccion || '';
   document.getElementById('email').value = vendor.email || '';
-  
+
   document.getElementById('vendor-modal').classList.remove('hidden');
 };
 
-window.deactivateVendor = function(vendorId, nombre) {
+window.deactivateVendor = function (vendorId, nombre) {
   pendingDeactivateVendor = { id: vendorId, nombre };
   document.getElementById('confirm-message').textContent = `¿Desactivar vendor "${nombre}"?`;
   document.getElementById('confirm-modal').classList.remove('hidden');
-  
+
   document.getElementById('confirm-action-btn').onclick = async () => {
     try {
       await updateDoc(doc(db, 'vendors', pendingDeactivateVendor.id), {
@@ -215,7 +218,7 @@ window.deactivateVendor = function(vendorId, nombre) {
   };
 };
 
-window.closeConfirmModal = function() {
+window.closeConfirmModal = function () {
   document.getElementById('confirm-modal').classList.add('hidden');
   pendingDeactivateVendor = null;
 };
@@ -223,17 +226,17 @@ window.closeConfirmModal = function() {
 // FORM SUBMIT
 document.getElementById('vendor-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  
+
   const nombre = document.getElementById('nombre').value.trim();
   const cif = document.getElementById('cif').value.trim() || null;
   const direccion = document.getElementById('direccion').value.trim() || null;
   const email = document.getElementById('email').value.trim() || null;
-  
+
   if (!nombre) {
     showToast('Nombre requerido', 'error');
     return;
   }
-  
+
   try {
     if (editingVendorId) {
       await updateDoc(doc(db, 'vendors', editingVendorId), {
@@ -247,7 +250,7 @@ document.getElementById('vendor-form').addEventListener('submit', async (e) => {
     } else {
       const vendorsSnapshot = await getDocs(query(collection(db, 'vendors'), where('estado', '==', 'activo')));
       const maxOrden = vendorsSnapshot.empty ? -1 : Math.max(...vendorsSnapshot.docs.map(doc => doc.data().orden));
-      
+
       await addDoc(collection(db, 'vendors'), {
         nombre,
         cif,
@@ -260,7 +263,7 @@ document.getElementById('vendor-form').addEventListener('submit', async (e) => {
       });
       showToast('Vendor creado correctamente');
     }
-    
+
     closeVendorModal();
   } catch (error) {
     console.error('Error:', error);
@@ -269,19 +272,19 @@ document.getElementById('vendor-form').addEventListener('submit', async (e) => {
 });
 
 // VENDOR COSTS
-window.viewVendorCosts = async function(vendorId, nombre, cif, direccion, email) {
+window.viewVendorCosts = async function (vendorId, nombre, cif, direccion, email) {
   selectedVendorId = vendorId;
-  
+
   document.getElementById('costs-vendor-name').textContent = nombre;
   document.getElementById('costs-vendor-cif').textContent = cif ? `CIF: ${cif}` : '';
   document.getElementById('costs-vendor-direccion').textContent = direccion ? `📍 ${direccion}` : '';
   document.getElementById('costs-vendor-email').textContent = email ? `📧 ${email}` : '';
-  
+
   document.getElementById('costs-modal').classList.remove('hidden');
   loadVendorCosts();
 };
 
-window.closeCostsModal = function() {
+window.closeCostsModal = function () {
   document.getElementById('costs-modal').classList.add('hidden');
   selectedVendorId = null;
   allVendorCosts = [];
@@ -293,21 +296,21 @@ async function loadVendorCosts() {
   document.getElementById('costs-table-container').classList.add('hidden');
   document.getElementById('costs-cards-container').classList.add('hidden');
   document.getElementById('costs-empty').classList.add('hidden');
-  
+
   try {
     const vendorName = document.getElementById('costs-vendor-name').textContent;
     const url = `${APPS_SCRIPT_URL}?endpoint=getVendorCosts&apiKey=${API_KEY}&vendorName=${encodeURIComponent(vendorName)}`;
-    
+
     const response = await fetch(url);
     const data = await response.json();
-    
+
     if (data.error) {
       throw new Error(data.message);
     }
-    
+
     allVendorCosts = data.costs || [];
     filterCosts();
-    
+
   } catch (error) {
     console.error('Error loading costs:', error);
     showToast('Error al cargar costes: ' + error.message, 'error');
@@ -316,22 +319,22 @@ async function loadVendorCosts() {
   }
 }
 
-window.filterCosts = function() {
+window.filterCosts = function () {
   const month = document.getElementById('filter-month').value;
   const year = document.getElementById('filter-year').value;
-  
+
   currentVendorCosts = allVendorCosts.filter(cost => {
     if (month && !cost.fecha.includes(`-${month}-`)) return false;
     if (year && !cost.fecha.startsWith(year)) return false;
     return true;
   });
-  
+
   renderCosts();
 };
 
 function renderCosts() {
   document.getElementById('costs-loading').classList.add('hidden');
-  
+
   if (currentVendorCosts.length === 0) {
     document.getElementById('costs-table-container').classList.add('hidden');
     document.getElementById('costs-cards-container').classList.add('hidden');
@@ -339,15 +342,15 @@ function renderCosts() {
     document.getElementById('costs-total').textContent = '0.00 €';
     return;
   }
-  
+
   document.getElementById('costs-empty').classList.add('hidden');
   document.getElementById('costs-table-container').classList.remove('hidden');
   document.getElementById('costs-cards-container').classList.remove('hidden');
-  
+
   // Table desktop
   const tbody = document.getElementById('costs-table-body');
   tbody.innerHTML = '';
-  
+
   currentVendorCosts.forEach(cost => {
     const row = document.createElement('tr');
     row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
@@ -363,11 +366,11 @@ function renderCosts() {
     `;
     tbody.appendChild(row);
   });
-  
+
   // Cards mobile
   const cardsContainer = document.getElementById('costs-cards-container');
   cardsContainer.innerHTML = '';
-  
+
   currentVendorCosts.forEach(cost => {
     const card = document.createElement('div');
     card.className = 'bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-2';
@@ -386,23 +389,23 @@ function renderCosts() {
     `;
     cardsContainer.appendChild(card);
   });
-  
+
   // Calculate total
   const total = currentVendorCosts.reduce((sum, cost) => sum + parseFloat(cost.importe || 0), 0);
   document.getElementById('costs-total').textContent = total.toFixed(2) + ' €';
 }
 
-window.exportCostsCSV = function() {
+window.exportCostsCSV = function () {
   if (currentVendorCosts.length === 0) {
     showToast('No hay datos para exportar', 'error');
     return;
   }
-  
+
   const vendorName = document.getElementById('costs-vendor-name').textContent;
   const csvRows = [];
-  
+
   csvRows.push('Fecha,Slot,Guía,PAX,Importe,Ticket URL');
-  
+
   currentVendorCosts.forEach(cost => {
     csvRows.push([
       cost.fecha,
@@ -413,18 +416,18 @@ window.exportCostsCSV = function() {
       cost.ticketUrl || ''
     ].join(','));
   });
-  
+
   const total = currentVendorCosts.reduce((sum, cost) => sum + parseFloat(cost.importe || 0), 0);
   csvRows.push('');
   csvRows.push(`TOTAL,,,,${total.toFixed(2)},`);
-  
+
   const csvContent = csvRows.join('\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = `costes_${vendorName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
   link.click();
-  
+
   showToast('CSV exportado correctamente');
 };
 
@@ -435,12 +438,11 @@ function formatDate(dateStr) {
 
 function showToast(message, type = 'success') {
   const toast = document.createElement('div');
-  toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white font-medium z-50 ${
-    type === 'error' ? 'bg-red-600' : 'bg-emerald-600'
-  }`;
+  toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white font-medium z-50 ${type === 'error' ? 'bg-red-600' : 'bg-emerald-600'
+    }`;
   toast.textContent = message;
   document.body.appendChild(toast);
-  
+
   setTimeout(() => {
     toast.remove();
   }, 3000);

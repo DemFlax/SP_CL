@@ -6,10 +6,13 @@
 // =========================================
 
 import { auth } from './firebase-config.js';
+import { initMenu } from './manager-menu.js';
+
+initMenu();
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js';
 
-const functions = getFunctions();
+const functions = getFunctions(undefined, 'us-central1');
 
 // Auto dark mode detection
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -42,26 +45,26 @@ function initFilters() {
   const monthSelect = document.getElementById('month-select');
   const yearSelect = document.getElementById('year-select');
   const guideFilter = document.getElementById('guide-filter');
- 
+
   const currentYear = new Date().getFullYear();
   for (let y = currentYear - 1; y <= currentYear + 1; y++) {
     yearSelect.innerHTML += `<option value="${y}">${y}</option>`;
   }
- 
+
   const today = new Date();
   monthSelect.value = String(today.getMonth() + 1).padStart(2, '0');
   yearSelect.value = currentYear;
- 
+
   monthSelect.addEventListener('change', () => {
     openAssignmentId = null;
     loadAssignments();
   });
- 
+
   yearSelect.addEventListener('change', () => {
     openAssignmentId = null;
     loadAssignments();
   });
- 
+
   guideFilter.addEventListener('change', () => {
     openAssignmentId = null;
     renderFilteredAssignments();
@@ -70,26 +73,26 @@ function initFilters() {
 
 async function loadAssignments() {
   showLoading();
- 
+
   const month = document.getElementById('month-select').value;
   const year = document.getElementById('year-select').value;
- 
+
   if (!month || !year) return;
- 
+
   const startDate = `${year}-${month}-01`;
   const endDate = `${year}-${month}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
- 
+
   try {
     const proxyGetAssignedTours = httpsCallable(functions, 'proxyGetAssignedTours');
     const result = await proxyGetAssignedTours({ startDate, endDate });
-    
+
     const data = result.data;
     if (data.error) throw new Error(data.message || 'Error desconocido');
-   
+
     cachedAssignments = data.assignments || [];
     updateGuideFilter(cachedAssignments);
     renderFilteredAssignments();
-   
+
   } catch (error) {
     console.error('Error loading assignments:', error);
     hideLoading();
@@ -102,59 +105,59 @@ async function loadAssignments() {
 function updateGuideFilter(assignments) {
   const guideFilter = document.getElementById('guide-filter');
   const currentValue = guideFilter.value;
- 
+
   const guidesMap = new Map();
   assignments.forEach(a => {
     if (!guidesMap.has(a.guideEmail)) {
       guidesMap.set(a.guideEmail, a.guideName);
     }
   });
- 
+
   guideFilter.innerHTML = '<option value="">Todos los guías</option>';
- 
+
   Array.from(guidesMap.entries())
     .sort((a, b) => a[1].localeCompare(b[1]))
     .forEach(([email, name]) => {
       guideFilter.innerHTML += `<option value="${email}">${name}</option>`;
     });
- 
+
   if (currentValue) guideFilter.value = currentValue;
 }
 
 function renderFilteredAssignments() {
   hideLoading();
- 
+
   const selectedGuideEmail = document.getElementById('guide-filter').value;
   let filtered = cachedAssignments;
- 
+
   if (selectedGuideEmail) {
     filtered = cachedAssignments.filter(a => a.guideEmail === selectedGuideEmail);
   }
- 
+
   renderAssignments(filtered);
 }
 
 function renderAssignments(assignments) {
   const container = document.getElementById('assignments-container');
   const countSpan = document.getElementById('assignments-count');
- 
+
   if (assignments.length === 0) {
     document.getElementById('empty-state').classList.remove('hidden');
     container.innerHTML = '';
     countSpan.textContent = '0';
     return;
   }
- 
+
   document.getElementById('empty-state').classList.add('hidden');
   container.innerHTML = '';
   countSpan.textContent = assignments.length;
- 
+
   assignments.sort((a, b) => {
     const dateCompare = a.fecha.localeCompare(b.fecha);
     if (dateCompare !== 0) return dateCompare;
     return (a.startTime || '').localeCompare(b.startTime || '');
   });
- 
+
   assignments.forEach(assignment => {
     container.appendChild(createAssignmentCard(assignment));
   });
@@ -166,16 +169,16 @@ function createAssignmentCard(assignment) {
   const day = dateObj.getDate();
   const monthName = dateObj.toLocaleDateString('es-ES', { month: 'short' });
   const year = dateObj.getFullYear();
- 
+
   const assignmentId = `${assignment.guideEmail}_${assignment.fecha}_${assignment.slot}`;
   const isOpen = openAssignmentId === assignmentId;
- 
+
   const card = document.createElement('div');
   card.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-200 dark:border-gray-700';
- 
+
   const header = document.createElement('div');
   header.className = 'p-4 cursor-pointer hover:bg-sky-50 dark:hover:bg-sky-900/20 transition';
- 
+
   header.innerHTML = `
     <div class="flex items-center justify-between gap-3">
       <div class="flex-1 min-w-0">
@@ -212,13 +215,13 @@ function createAssignmentCard(assignment) {
       </div>
     </div>
   `;
- 
+
   header.addEventListener('click', () => toggleAssignment(assignmentId));
   card.appendChild(header);
- 
+
   const body = document.createElement('div');
   body.className = `overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-[2000px]' : 'max-h-0'}`;
- 
+
   if (!assignment.guests || assignment.guests.length === 0) {
     body.innerHTML = `
       <div class="p-4 border-t border-gray-200 dark:border-gray-700">
@@ -268,7 +271,7 @@ function createAssignmentCard(assignment) {
         </div>
       </div>
     `).join('');
-   
+
     body.innerHTML = `
       <div class="p-4 border-t border-gray-200 dark:border-gray-700">
         <h4 class="text-base font-bold text-gray-900 dark:text-white mb-4">
@@ -280,7 +283,7 @@ function createAssignmentCard(assignment) {
       </div>
     `;
   }
- 
+
   card.appendChild(body);
   return card;
 }
@@ -299,11 +302,11 @@ window.copyPhoneNumber = (phone, event) => {
   const button = event.target.closest('button');
   const icon = button.querySelector('svg');
   const originalIcon = icon.innerHTML;
- 
+
   icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>`;
   icon.classList.add('text-green-600', 'dark:text-green-400');
   button.classList.add('scale-110', 'bg-green-100', 'dark:bg-green-900/30');
- 
+
   navigator.clipboard.writeText(cleanPhone).then(() => {
     showToast('Teléfono copiado', 'success');
     setTimeout(() => {
@@ -334,11 +337,10 @@ function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   const toastMessage = document.getElementById('toast-message');
   toastMessage.textContent = message;
-  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg ${
-    type === 'success' ? 'bg-emerald-500 dark:bg-emerald-600' :
+  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg ${type === 'success' ? 'bg-emerald-500 dark:bg-emerald-600' :
     type === 'error' ? 'bg-red-500 dark:bg-red-600' :
-    type === 'warning' ? 'bg-yellow-500 dark:bg-yellow-600' : 'bg-sky-500 dark:bg-sky-600'
-  } text-white max-w-xs sm:max-w-md z-50`;
+      type === 'warning' ? 'bg-yellow-500 dark:bg-yellow-600' : 'bg-sky-500 dark:bg-sky-600'
+    } text-white max-w-xs sm:max-w-md z-50`;
   toast.classList.remove('hidden');
   setTimeout(() => toast.classList.add('hidden'), 3000);
 }
