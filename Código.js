@@ -187,6 +187,37 @@ function handleUploadSingleVendorTicket(params) {
 }
 
 // ============================================
+// AUXILIAR: Obtener o crear pestaña del mes
+// ============================================
+function getOrCreateMonthSheet(ss, fecha) {
+  // fecha puede venir como "YYYY-MM-DD" o Date object
+  var dateStr = typeof fecha === 'string' ? fecha : Utilities.formatDate(fecha, "GMT+1", "yyyy-MM-dd");
+  var parts = dateStr.split('-');
+  var sheetName = parts[0] + '-' + parts[1]; // "YYYY-MM"
+
+  var sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    Logger.log('Creating new sheet: ' + sheetName);
+    sheet = ss.insertSheet(sheetName);
+    var headers = [
+      'Timestamp',
+      'Fecha',
+      'Slot',
+      'Guía',
+      'Pax',
+      'Vendor',
+      'Importe',
+      'Ticket URL',
+      'Feedback'
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// ============================================
 // NUEVO: WRITE VENDOR COSTS TO SHEET (BATCH)
 // ============================================
 function handleWriteVendorCostsToSheet(params) {
@@ -194,8 +225,7 @@ function handleWriteVendorCostsToSheet(params) {
     Logger.log('=== writeVendorCostsToSheet Request ===');
 
     const apiKey = params.apiKey;
-    const storedKey =
-      PropertiesService.getScriptProperties().getProperty('API_KEY');
+    const storedKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
 
     if (!apiKey || apiKey !== storedKey) {
       Logger.log('ERROR: Invalid API Key');
@@ -206,40 +236,11 @@ function handleWriteVendorCostsToSheet(params) {
       });
     }
 
-    Logger.log('Parsing vendorsData...');
     const vendorsData = JSON.parse(params.vendorsData);
-
-    Logger.log('Vendors to write: ' + vendorsData.length);
-
     const ss = SpreadsheetApp.openById(VENDORS_SHEET_ID);
 
-    // Calcular nombre de pestaña (YYYY-MM)
-    const dateObj = new Date(params.fecha); // params.fecha es "YYYY-MM-DD"
-    // Asegurar que parsea bien (a veces Date() puede fallar con strings simples)
-    // Mejor split manual para seguridad
-    const parts = params.fecha.split('-');
-    const sheetName = parts[0] + '-' + parts[1]; // "2025-12"
-
-    let sheet = ss.getSheetByName(sheetName);
-
-    // Si no existe, crear y poner cabeceras
-    if (!sheet) {
-      sheet = ss.insertSheet(sheetName);
-      // Cabeceras (mismo orden que abajo)
-      const headers = [
-        'Timestamp',
-        'Fecha',
-        'Slot',
-        'Guía',
-        'Pax',
-        'Vendor',
-        'Importe',
-        'Ticket URL',
-        'Feedback'
-      ];
-      sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-      sheet.setFrozenRows(1);
-    }
+    // Usar el auxiliar unificado
+    const sheet = getOrCreateMonthSheet(ss, params.fecha);
 
     const rows = vendorsData.map(function (vendor, idx) {
       return [
@@ -259,7 +260,7 @@ function handleWriteVendorCostsToSheet(params) {
       .getRange(sheet.getLastRow() + 1, 1, rows.length, 9)
       .setValues(rows);
 
-    Logger.log('✅ Batch wrote ' + rows.length + ' rows to sheet ' + sheetName);
+    Logger.log('✅ Batch wrote ' + rows.length + ' rows to sheet ' + sheet.getName());
 
     return buildResponse({
       success: true,
@@ -267,7 +268,6 @@ function handleWriteVendorCostsToSheet(params) {
     });
   } catch (err) {
     Logger.log('ERROR writeVendorCostsToSheet: ' + err.toString());
-    Logger.log('Stack: ' + err.stack);
     return buildResponse({
       error: true,
       code: 'SHEET_WRITE_FAILED',
@@ -1157,10 +1157,12 @@ function appendToVendorsSheet(
   vendorsData,
   uploadedVendors
 ) {
-  Logger.log('Appending to sheet (batch)...');
+  Logger.log('Appending to sheet (batch unificado)...');
 
   const ss = SpreadsheetApp.openById(VENDORS_SHEET_ID);
-  const sheet = ss.getSheets()[0];
+
+  // UNIFICACIÓN: Usar el auxiliar para escribir en la pestaña correcta
+  const sheet = getOrCreateMonthSheet(ss, params.fecha);
 
   const feedback = params.postTourFeedback || '';
 
@@ -1182,7 +1184,7 @@ function appendToVendorsSheet(
     .getRange(sheet.getLastRow() + 1, 1, rows.length, 9)
     .setValues(rows);
 
-  Logger.log('✅ Batch appended ' + rows.length + ' rows');
+  Logger.log('✅ Batch consolidated ' + rows.length + ' rows to ' + sheet.getName());
 }
 
 function getVendorCosts(e) {

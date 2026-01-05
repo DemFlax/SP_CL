@@ -7,7 +7,7 @@ const fetch = require('node-fetch');
 
 // Secrets
 const appsScriptUrl = defineSecret('APPS_SCRIPT_URL');
-// const sendgridKey = defineSecret('SENDGRID_API_KEY'); // Future use if emails needed
+const appsScriptKey = defineSecret('APPS_SCRIPT_API_KEY');
 
 // Config
 const BATCH_SIZE = 40; // Apps Script limit is usually loose but safely under 50
@@ -27,8 +27,8 @@ async function checkEventsInAppsScript(eventIds) {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Apps Script quirk
             body: JSON.stringify({
-                endpoint: 'checkEventsStatus', // Must match Código.js
-                apiKey: 'sfs-calendar-2024-secure-key', // Hardcoded in Código.js for now
+                endpoint: 'checkEventsStatus',
+                apiKey: appsScriptKey.value(),
                 eventIds: JSON.stringify(eventIds)
             })
         });
@@ -170,7 +170,7 @@ exports.syncCancellationsJob = async (event) => {
 // Callable function for manual trigger
 exports.manualSyncCancellations = onCall({
     cors: true,
-    secrets: [appsScriptUrl]
+    secrets: [appsScriptUrl, appsScriptKey]
 }, async (request) => {
     const { auth } = request;
     if (!auth || auth.token.role !== 'manager') {

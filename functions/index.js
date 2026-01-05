@@ -14,16 +14,14 @@ const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { logger } = require('firebase-functions');
-const sgMail = require('@sendgrid/mail');
 const axios = require('axios');
 const functions = require('firebase-functions/v1');
 
 initializeApp();
 
-// =========================================
 // SECRETS (Secret Manager)
-// =========================================
-const sendgridKey = defineSecret('SENDGRID_API_KEY');
+const vendorCosts = require('./src/vendor-costs');
+const brevoKey = vendorCosts.brevoKey;
 
 // =========================================
 // VARIABLES DE ENTORNO (.env)
@@ -122,7 +120,7 @@ async function deleteQueryBatch(db, query, resolve, reject) {
 // =========================================
 exports.onCreateGuide = onDocumentCreated({
   document: 'guides/{guideId}',
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async (event) => {
   const guide = event.data.data();
   const guideId = event.params.guideId;
@@ -152,7 +150,6 @@ exports.onCreateGuide = onDocumentCreated({
     // ========================================
     // PASO 2: Enviar email invitación
     // ========================================
-    sgMail.setApiKey(sendgridKey.value());
     const firebaseLink = await getAuth().generatePasswordResetLink(guide.email);
     const urlObj = new URL(firebaseLink);
     const oobCode = urlObj.searchParams.get('oobCode');
@@ -160,9 +157,8 @@ exports.onCreateGuide = onDocumentCreated({
 
     logger.info('🔗 Link generado', { email: guide.email, oobCode: oobCode.substring(0, 10) + '...' });
 
-    const msg = {
+    await vendorCosts.sendEmail({
       to: guide.email,
-      from: { email: FROM_EMAIL, name: FROM_NAME },
       subject: 'Invitación - Calendario Tours Spain Food Sherpas',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -189,10 +185,8 @@ exports.onCreateGuide = onDocumentCreated({
           <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
         </div>
       `
-    };
-
-    await sgMail.send(msg);
-    logger.info('📧 Email enviado vía SendGrid', { email: guide.email });
+    });
+    logger.info('📧 Email enviado vía Brevo', { email: guide.email });
 
     await getFirestore().collection('notifications').add({
       guiaId: guideId,
@@ -261,7 +255,7 @@ exports.manualSyncCancellations = syncCancellations.manualSyncCancellations;
 // =========================================
 exports.onUpdateGuide = onDocumentUpdated({
   document: 'guides/{guideId}',
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async (event) => {
   const before = event.data.before.data();
   const after = event.data.after.data();
@@ -305,7 +299,6 @@ exports.onUpdateGuide = onDocumentUpdated({
       // ========================================
       // PASO 2: Enviar email reactivación
       // ========================================
-      sgMail.setApiKey(sendgridKey.value());
       const firebaseLink = await getAuth().generatePasswordResetLink(after.email);
       const urlObj = new URL(firebaseLink);
       const oobCode = urlObj.searchParams.get('oobCode');
@@ -313,9 +306,8 @@ exports.onUpdateGuide = onDocumentUpdated({
 
       logger.info('🔗 Link generado para reactivación', { email: after.email });
 
-      const msg = {
+      await vendorCosts.sendEmail({
         to: after.email,
-        from: { email: FROM_EMAIL, name: FROM_NAME },
         subject: 'Reactivación - Calendario Tours Spain Food Sherpas',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -342,9 +334,7 @@ exports.onUpdateGuide = onDocumentUpdated({
             <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
           </div>
         `
-      };
-
-      await sgMail.send(msg);
+      });
       logger.info('📧 Email reactivación enviado', { email: after.email });
 
       await getFirestore().collection('notifications').add({
@@ -405,6 +395,11 @@ exports.onUpdateGuide = onDocumentUpdated({
 // =========================================
 exports.assignShiftsToGuide = onCall(async (request) => {
   const { guideId, fecha, turno, eventId, tourName, startTime } = request.data;
+  const { auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Solo los managers pueden asignar turnos.');
+  }
 
   if (!guideId || !fecha || !turno) {
     throw new HttpsError('invalid-argument', 'guideId, fecha y turno son obligatorios');
@@ -450,6 +445,11 @@ exports.assignShiftsToGuide = onCall(async (request) => {
 // =========================================
 exports.deleteShiftAssignment = onCall(async (request) => {
   const { guideId, fecha, turno } = request.data;
+  const { auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Solo los managers pueden eliminar asignaciones.');
+  }
 
   if (!guideId || !fecha || !turno) {
     throw new HttpsError('invalid-argument', 'guideId, fecha y turno son obligatorios');
@@ -495,6 +495,11 @@ exports.deleteShiftAssignment = onCall(async (request) => {
 // =========================================
 exports.generateShifts = onCall(async (request) => {
   const { guideId, year, month } = request.data;
+  const { auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Solo los managers pueden generar turnos.');
+  }
 
   if (!guideId || year === undefined || month === undefined) {
     throw new HttpsError('invalid-argument', 'guideId, year y month son obligatorios');
@@ -521,6 +526,11 @@ exports.generateShifts = onCall(async (request) => {
 // =========================================
 exports.deleteShifts = onCall(async (request) => {
   const { guideId, year, month } = request.data;
+  const { auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Solo los managers pueden eliminar turnos.');
+  }
 
   if (!guideId || year === undefined || month === undefined) {
     throw new HttpsError('invalid-argument', 'guideId, year y month son obligatorios');
@@ -579,9 +589,14 @@ exports.saveBookeoId = onRequest({ cors: true }, async (req, res) => {
 // FUNCIÓN: resendInvitation
 // =========================================
 exports.resendInvitation = onCall({
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async (request) => {
   const { email } = request.data;
+  const { auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Solo los managers pueden reenviar invitaciones.');
+  }
 
   if (!email) {
     throw new HttpsError('invalid-argument', 'Email requerido');
@@ -604,10 +619,8 @@ exports.resendInvitation = onCall({
 
     logger.info('Nuevo link generado', { email, oobCode: oobCode.substring(0, 10) + '...' });
 
-    sgMail.setApiKey(sendgridKey.value());
-    const msg = {
+    await vendorCosts.sendEmail({
       to: email,
-      from: { email: FROM_EMAIL, name: FROM_NAME },
       subject: 'Nueva invitación - Calendario Tours Spain Food Sherpas',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -633,9 +646,7 @@ exports.resendInvitation = onCall({
           <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
         </div>
       `
-    };
-
-    await sgMail.send(msg);
+    });
     logger.info('Email reenviado exitosamente', { email });
 
     return { success: true, message: 'Invitación reenviada correctamente' };
@@ -701,7 +712,6 @@ exports.devSetPassword = onRequest(async (req, res) => {
 // =========================================
 // VENDOR COSTS MODULE - VERIFACTU
 // =========================================
-const vendorCosts = require('./src/vendor-costs');
 exports.registerVendorCost = vendorCosts.registerVendorCost;
 exports.calculateSalaryPreview = vendorCosts.calculateSalaryPreview;
 exports.generateGuideInvoices = vendorCosts.generateGuideInvoices;
@@ -711,6 +721,7 @@ exports.guideRejectReport = vendorCosts.guideRejectReport;
 exports.uploadOfficialInvoice = vendorCosts.uploadOfficialInvoice;
 exports.checkUploadDeadlines = vendorCosts.checkUploadDeadlines;
 exports.manualGenerateGuideInvoices = vendorCosts.manualGenerateGuideInvoices;
+exports.refreshGuideInvoice = vendorCosts.refreshGuideInvoice;
 exports.migrateVendorCostsToNet = vendorCosts.migrateVendorCostsToNet;
 exports.managerApproveInvoice = vendorCosts.managerApproveInvoice;
 exports.managerRejectInvoice = vendorCosts.managerRejectInvoice;
@@ -725,7 +736,7 @@ exports.generateMonthlyShifts = onSchedule({
   schedule: '0 2 1 * *', // Día 1 de cada mes a las 02:00 UTC (03:00/04:00 Madrid según horario)
   timeZone: 'UTC',
   region: 'us-central1',
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async (event) => {
   logger.info('=== 🔄 generateMonthlyShifts TRIGGERED ===');
 
@@ -825,63 +836,40 @@ exports.generateMonthlyShifts = onSchedule({
 
     // Notificar al Manager sobre el resultado
     if (guidesProcessed > 0 || errors.length > 0) {
+      // 5. Enviar email de resumen al manager
       try {
-        sgMail.setApiKey(sendgridKey.value());
-
         const subject = errors.length > 0
           ? `⚠️ Generación automática turnos ${monthStr} - Con errores`
           : `✅ Generación automática turnos ${monthStr} - Exitosa`;
 
-        await sgMail.send({
+        await vendorCosts.sendEmail({
           to: MANAGER_EMAIL,
-          from: { email: FROM_EMAIL, name: FROM_NAME },
           subject: subject,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: ${errors.length > 0 ? '#dc2626' : '#059669'};">
-                ${errors.length > 0 ? '⚠️' : '✅'} Generación Automática de Turnos
-              </h2>
-              <p><strong>Mes generado:</strong> ${monthStr}</p>
-              <hr style="border: 1px solid #eee; margin: 20px 0;">
-              <h3>Resumen:</h3>
+              <h2>Resumen de generación mensual (${monthStr})</h2>
+              <p>El proceso de generación de turnos para el mes ha finalizado.</p>
               <ul>
-                <li><strong>Guías activos:</strong> ${guidesSnapshot.size}</li>
                 <li><strong>Guías procesados:</strong> ${guidesProcessed}</li>
-                <li><strong>Guías omitidos:</strong> ${guidesSkipped} (mes ya existía)</li>
-                <li><strong>Turnos creados:</strong> ${totalCreated}</li>
-                <li><strong>Errores:</strong> ${errors.length}</li>
+                <li><strong>Guías omitidos (ya tenían turnos):</strong> ${guidesSkipped}</li>
+                <li><strong>Total slots creados:</strong> ${totalCreated}</li>
               </ul>
               ${errors.length > 0 ? `
-                <hr style="border: 1px solid #eee; margin: 20px 0;">
-                <h3 style="color: #dc2626;">Detalles de errores:</h3>
-                <ul style="color: #dc2626;">
-                  ${errors.map(e => `<li><strong>${e.guideName}</strong> (${e.guideId}): ${e.error}</li>`).join('')}
-                </ul>
-                <p style="color: #dc2626; font-weight: bold;">
-                  ACCIÓN REQUERIDA: Revisar errores y generar manualmente si es necesario
-                </p>
-              ` : `
-                <p style="color: #059669; font-weight: bold;">
-                  ✅ Todos los turnos se generaron correctamente
-                </p>
-              `}
-              <hr style="border: 1px solid #eee; margin: 20px 0;">
-              <p style="color: #666; font-size: 12px;">
-                <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a> | 
-                Sistema Automático - Spain Food Sherpas
-              </p>
+                <div style="color: #d32f2f; background: #ffebee; padding: 15px; border-radius: 4px;">
+                  <h3>⚠️ Errores encontrados:</h3>
+                  <ul>${errors.map(e => `<li>G-${e.guideId}: ${e.error}</li>`).join('')}</ul>
+                </div>` : ''}
+              <p>Puedes revisarlos en el Panel de Administrador.</p>
+              <a href="${APP_URL}/manager-assignments.html" style="display: inline-block; padding: 10px 20px; background: #1a73e8; color: white; text-decoration: none; border-radius: 4px;">Ir al Panel</a>
             </div>
           `
         });
-
-        logger.info('📧 Email resumen enviado al Manager', { to: MANAGER_EMAIL });
-
-      } catch (emailError) {
-        logger.error('❌ Error enviando email resumen', {
-          error: emailError.message,
-          stack: emailError.stack
-        });
+      } catch (mailError) {
+        logger.error('Error enviando notificación al manager', { error: mailError.message });
       }
+
+      logger.info('📧 Email resumen enviado al Manager', { to: MANAGER_EMAIL });
+
     }
 
   } catch (error) {
@@ -892,25 +880,12 @@ exports.generateMonthlyShifts = onSchedule({
 
     // Intentar notificar al Manager del error crítico
     try {
-      if (sendgridKey) {
-        sgMail.setApiKey(sendgridKey.value());
-        await sgMail.send({
+      if (brevoKey) {
+        await vendorCosts.sendEmail({
           to: MANAGER_EMAIL,
-          from: { email: FROM_EMAIL, name: FROM_NAME },
           subject: '🚨 ERROR CRÍTICO - Generación automática turnos',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #dc2626;">🚨 Error Crítico en Sistema</h2>
-              <p>La generación automática mensual de turnos ha fallado completamente.</p>
-              <p><strong>Error:</strong> ${error.message}</p>
-              <p style="color: #dc2626; font-weight: bold;">
-                ACCIÓN URGENTE REQUERIDA: Generar turnos manualmente desde el dashboard
-              </p>
-              <hr style="border: 1px solid #eee; margin: 20px 0;">
-              <p style="color: #666; font-size: 12px;">
-                <a href="${APP_URL}" style="color: #3b82f6;">Ver Dashboard</a>
-              </p>
-            </div>
           `
         });
       }

@@ -13,17 +13,18 @@
 // - NUEVO: deduplicación de vendor_costs por shiftId al generar reportes
 // =========================================
 
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { logger } = require('firebase-functions');
 const { defineSecret } = require('firebase-functions/params');
-const sgMail = require('@sendgrid/mail');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const axios = require('axios');
 
-// Secrets
-const sendgridKey = defineSecret('SENDGRID_API_KEY');
+// SECRETS
+const brevoKey = defineSecret('BREVO_API_KEY');
+exports.brevoKey = brevoKey;
 const appsScriptUrl = defineSecret('APPS_SCRIPT_URL');
+const appsScriptKey = defineSecret('APPS_SCRIPT_API_KEY');
 
 // Config
 const MANAGER_EMAIL = process.env.MANAGER_EMAIL || 'madrid@spainfoodsherpas.com';
@@ -105,8 +106,50 @@ async function uploadToGoogleDrive(params) {
 }
 
 // =========================================
-// HELPER: Send email with template
+// HELPER: sendEmail (Brevo API)
 // =========================================
+async function sendEmail({ to, subject, html, attachments = [] }) {
+  const apiKey = brevoKey.value();
+  if (!apiKey) {
+    logger.error('BREVO_API_KEY no configurado');
+    return false;
+  }
+
+  try {
+    const payload = {
+      sender: { name: FROM_NAME, email: FROM_EMAIL },
+      to: [{ email: to }],
+      subject: subject,
+      htmlContent: html,
+    };
+
+    if (attachments.length > 0) {
+      payload.attachment = attachments.map(att => ({
+        content: att.content,
+        name: att.filename
+      }));
+    }
+
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
+
+    logger.info('Email enviado vía Brevo', { messageId: response.data.messageId });
+    return true;
+  } catch (error) {
+    logger.error('Error enviando email vía Brevo', {
+      error: error.message,
+      details: error.response?.data
+    });
+    return false;
+  }
+}
+exports.sendEmail = sendEmail;
+
 function getEmailTemplate(content) {
   return `
     <!DOCTYPE html>
@@ -231,7 +274,7 @@ async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = 
       const tours = [];
       const seenShiftIds = new Set(); // dedupe por shiftId
 
-      costsSnap.forEach(docSnap => {
+      for (const docSnap of costsSnap.docs) {
         const cost = docSnap.data();
 
         if (cost.shiftId) {
@@ -243,14 +286,26 @@ async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = 
               fecha: cost.fecha,
               slot: cost.slot
             });
-            return;
+            continue;
           }
           seenShiftIds.add(cost.shiftId);
         }
 
-        // salarioCalculado ya es NETO (sin IVA)
-        // Aseguramos que sea número
-        const salary = Number(cost.salarioCalculado) || 0;
+        // RECALCULAR SALARIO siempre desde la tabla oficial, usando los pax registrados
+        // Esto ignora el salario que se guardara en el documento vendor_cost individualmente
+        let salary = 0;
+        try {
+          salary = await calculateSalary(cost.numPax || 0);
+        } catch (salErr) {
+          logger.warn('Error calculando salario para tour individual, se usa 0', {
+            guideId,
+            fecha: cost.fecha,
+            numPax: cost.numPax,
+            error: salErr.message
+          });
+          salary = 0;
+        }
+
         totalSalary += salary;
 
         tours.push({
@@ -259,9 +314,9 @@ async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = 
           slot: cost.slot,
           tourDescription: cost.tourDescription,
           numPax: cost.numPax,
-          salario: Number(cost.salarioCalculado) || 0
+          salario: salary // Guardamos el salario recalculado
         });
-      });
+      }
 
       if (tours.length === 0) {
         logger.info('Todos los vendor_costs eran duplicados, nada que reportar', {
@@ -329,33 +384,43 @@ async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = 
     .join('');
 
   if (notifyManager && (generated > 0 || hasErrors)) {
-    sgMail.setApiKey(sendgridKey.value());
-    await sgMail.send({
-      to: MANAGER_EMAIL,
-      from: { email: FROM_EMAIL, name: FROM_NAME },
-      subject: `Resumen generación reportes ${invoiceMonth}: ${generated} creados${hasErrors ? ' con incidencias' : ''}`,
-      html: getEmailTemplate(`
-        <h2>Resultados de la generación automática</h2>
-        <p>Mes procesado: <strong>${invoiceMonth}</strong>.</p>
-        ${generated > 0
-          ? `
-          <p>Se crearon <strong>${generated}</strong> reporte(s):</p>
-          <ul>${summaryList}</ul>
-          <a href="${APP_URL}/manager-invoices.html" class="button">Abrir panel de manager</a>
-        `
-          : '<p>No se generaron reportes nuevos.</p>'
-        }
-        ${hasErrors
-          ? `
-          <div class="alert">
-            <strong>Incidencias:</strong>
-            <ul>${errorList}</ul>
-          </div>
-        `
-          : ''
-        }
-      `)
-    });
+    try {
+      await sendEmail({
+        to: MANAGER_EMAIL,
+        subject: `Resumen generación reportes ${invoiceMonth}: ${generated} creados${hasErrors ? ' con incidencias' : ''}`,
+        html: getEmailTemplate(`
+          <h2>Resultados de la generación automática</h2>
+          <p>Mes procesado: <strong>${invoiceMonth}</strong>.</p>
+          ${generated > 0
+            ? `
+            <p>Se crearon <strong>${generated}</strong> reporte(s):</p>
+            <ul>${summaryList}</ul>
+            <a href="${APP_URL}/manager-invoices.html" class="button">Abrir panel de manager</a>
+          `
+            : '<p>No se generaron reportes nuevos.</p>'
+          }
+          ${hasErrors
+            ? `
+            <div class="alert">
+              <strong>Incidencias:</strong>
+              <ul>${errorList}</ul>
+            </div>
+          `
+            : ''
+          }
+        `)
+      });
+      logger.info('Resumen enviado al manager correctamente');
+    } catch (mailError) {
+      logger.error('Error enviando email de resumen al manager', {
+        error: mailError.message,
+        response: mailError.response?.data,
+        stack: mailError.stack
+      });
+      // No lanzamos error para que la función no falle si solo falla el email
+      // Pero agregamos a la lista de errores para el retorno
+      errors.push({ guideId: 'SYSTEM', guideName: 'Email Notification', error: mailError.message });
+    }
   }
 
   if (hasErrors) {
@@ -372,7 +437,7 @@ async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = 
 exports.generateGuideInvoices = onSchedule({
   schedule: '1 0 1 * *',
   timeZone: 'UTC',
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async () => {
   logger.info('Iniciando generación reportes de servicios (ejecución programada)');
 
@@ -393,7 +458,7 @@ exports.generateGuideInvoices = onSchedule({
 // =========================================
 exports.manualGenerateGuideInvoices = onCall({
   cors: true,
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async (request) => {
   const { data, auth } = request;
 
@@ -401,23 +466,138 @@ exports.manualGenerateGuideInvoices = onCall({
     throw new HttpsError('permission-denied', 'Solo managers');
   }
 
-  const targetMonthDate = resolveTargetMonth(data?.month);
-  const notifyManager = data?.notifyManager !== false;
+  const targetMonth = data.month; // Formato YYYY-MM
+  if (!targetMonth) {
+    throw new HttpsError('invalid-argument', 'Mes requerido (YYYY-MM)');
+  }
+
+  const notifyManager = data.notifyManager !== false;
+  const targetMonthDate = new Date(`${targetMonth}-01T12:00:00Z`);
 
   try {
     const result = await generateGuideInvoicesForMonth(targetMonthDate, { notifyManager });
     return { success: true, ...result };
   } catch (error) {
-    logger.error('Error manual generando reportes', {
+    logger.error('Error manual generando reportes (FULL DEBUG)', {
       month: data?.month,
-      error: error.message
+      message: error.message,
+      stack: error.stack,
+      raw: JSON.stringify(error)
     });
 
     if (error instanceof HttpsError) {
       throw error;
     }
 
-    throw new HttpsError('internal', 'Error generando reportes');
+    throw new HttpsError('internal', `Error generando reportes: ${error.message}`);
+  }
+});
+
+// =========================================
+// FUNCTION: refreshGuideInvoice
+// =========================================
+exports.refreshGuideInvoice = onCall({
+  cors: true
+}, async (request) => {
+  const { data, auth } = request;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Solo managers');
+  }
+
+  if (!data.invoiceId) {
+    throw new HttpsError('invalid-argument', 'invoiceId requerido');
+  }
+
+  const db = getFirestore();
+
+  try {
+    const invoiceRef = db.collection('guide_invoices').doc(data.invoiceId);
+    const invoiceSnap = await invoiceRef.get();
+
+    if (!invoiceSnap.exists) {
+      throw new HttpsError('not-found', 'Reporte no encontrado');
+    }
+
+    const invoice = invoiceSnap.data();
+
+    // Solo se puede refrescar si no está ya aprobada o subida la factura real
+    if (invoice.status !== 'MANAGER_REVIEW' && invoice.status !== 'REJECTED') {
+      throw new HttpsError('failed-precondition', 'Solo se pueden refrescar reportes en revisión o rechazados');
+    }
+
+    const invoiceMonth = invoice.month; // YYYY-MM
+    const guideId = invoice.guideId;
+
+    const [year, month] = invoiceMonth.split('-');
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(Date.UTC(parseInt(year), parseInt(month), 0)).getUTCDate();
+    const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
+    logger.info('Refrescando reporte', { invoiceId: data.invoiceId, guideId, invoiceMonth });
+
+    const costsSnap = await db.collection('vendor_costs')
+      .where('guideId', '==', guideId)
+      .where('fecha', '>=', startDate)
+      .where('fecha', '<=', endDate)
+      .get();
+
+    if (costsSnap.empty) {
+      return { success: false, message: 'No se encontraron costes registrados para este periodo' };
+    }
+
+    let totalSalary = 0;
+    const tours = [];
+    const seenShiftIds = new Set();
+
+    for (const docSnap of costsSnap.docs) {
+      const cost = docSnap.data();
+
+      if (cost.shiftId) {
+        if (seenShiftIds.has(cost.shiftId)) continue;
+        seenShiftIds.add(cost.shiftId);
+      }
+
+      let salary = 0;
+      try {
+        salary = await calculateSalary(cost.numPax || 0);
+      } catch (salErr) {
+        logger.warn('Error calculando salario en refresh, se usa 0', { guideId, fecha: cost.fecha, numPax: cost.numPax });
+        salary = 0;
+      }
+
+      totalSalary += salary;
+
+      tours.push({
+        shiftId: cost.shiftId || null,
+        fecha: cost.fecha,
+        slot: cost.slot,
+        tourDescription: cost.tourDescription,
+        numPax: cost.numPax,
+        salario: salary
+      });
+    }
+
+    // Actualizar el documento
+    await invoiceRef.update({
+      tours,
+      totalSalary: parseFloat(totalSalary.toFixed(2)),
+      updatedAt: FieldValue.serverTimestamp(),
+      refreshedAt: FieldValue.serverTimestamp() // Log de control
+    });
+
+    logger.info('Reporte refrescado con éxito', { invoiceId: data.invoiceId, toursCount: tours.length });
+
+    return {
+      success: true,
+      count: tours.length,
+      totalSalary: parseFloat(totalSalary.toFixed(2))
+    };
+
+  } catch (error) {
+    logger.error('Error refrescando reporte', { invoiceId: data.invoiceId, error: error.message });
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('internal', 'Error al refrescar el reporte');
   }
 });
 
@@ -426,7 +606,7 @@ exports.manualGenerateGuideInvoices = onCall({
 // =========================================
 exports.managerSendToGuide = onCall({
   cors: true,
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async (request) => {
   const { data, auth } = request;
 
@@ -449,12 +629,12 @@ exports.managerSendToGuide = onCall({
     const invoice = invoiceSnap.data();
 
     if (invoice.status !== 'MANAGER_REVIEW' && invoice.status !== 'REJECTED') {
-      throw new HttpsError('failed-precondition', 'Reporte ya enviado o en otro estado');
+      throw new HttpsError('failed-precondition', 'El reporte no está en estado de revisión');
     }
 
     const updateData = {
       status: 'PENDING_GUIDE_APPROVAL',
-      sentToGuideAt: FieldValue.serverTimestamp(),
+      managerSentToGuideAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     };
 
@@ -469,28 +649,34 @@ exports.managerSendToGuide = onCall({
 
     await db.collection('guide_invoices').doc(data.invoiceId).update(updateData);
 
-    sgMail.setApiKey(sendgridKey.value());
-    await sgMail.send({
-      to: invoice.guideEmail,
-      from: { email: FROM_EMAIL, name: FROM_NAME },
-      subject: `Reporte de Servicios ${invoice.month} - Revisión requerida`,
-      html: getEmailTemplate(`
-        <h2>Tu reporte está listo para revisión</h2>
-        <p>Hola ${invoice.guideName},</p>
-        <p>El manager ha revisado tu reporte de <strong>${invoice.month}</strong>.</p>
-        <p><strong>Total servicios:</strong> ${(updateData.totalSalary || invoice.totalSalary).toFixed(2)}€</p>
-        <p>Por favor, accede a tu dashboard para revisar y aprobar o rechazar.</p>
-        <a href="${APP_URL}/my-invoices.html" class="button">
-          Ver Reporte
-        </a>
-      `)
-    });
-
-    logger.info('Reporte enviado a guía', {
-      invoiceId: data.invoiceId,
-      guideId: invoice.guideId,
-      guideName: invoice.guideName
-    });
+    try {
+      await sendEmail({
+        to: invoice.guideEmail,
+        subject: `Reporte de Servicios ${invoice.month} - Revisión requerida`,
+        html: getEmailTemplate(`
+          <h2>Tu reporte está listo para revisión</h2>
+          <p>Hola ${invoice.guideName},</p>
+          <p>El manager ha revisado tu reporte de <strong>${invoice.month}</strong>.</p>
+          <p><strong>Total servicios:</strong> ${(updateData.totalSalary || invoice.totalSalary).toFixed(2)}€</p>
+          <p>Por favor, accede a tu dashboard para revisar y aprobar o rechazar.</p>
+          <a href="${APP_URL}/my-invoices.html" class="button">
+            Ver Reporte
+          </a>
+        `)
+      });
+      logger.info('Reporte enviado a guía (email OK)', { invoiceId: data.invoiceId });
+    } catch (mailError) {
+      logger.error('Error enviando email al guía (DB actualizada OK)', {
+        invoiceId: data.invoiceId,
+        error: mailError.message,
+        response: mailError.response?.body
+      });
+      // Importante: No lanzamos error aquí para que el manager vea que se guardó
+      return {
+        success: true,
+        warning: 'El reporte se marcó como enviado pero el email de notificación falló.'
+      };
+    }
 
     return { success: true };
 
@@ -513,7 +699,7 @@ exports.managerSendToGuide = onCall({
 // =========================================
 exports.guideApproveReport = onCall({
   cors: true,
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async (request) => {
   const { data, auth } = request;
 
@@ -542,7 +728,7 @@ exports.guideApproveReport = onCall({
     }
 
     if (invoice.status !== 'PENDING_GUIDE_APPROVAL') {
-      throw new HttpsError('failed-precondition', 'Estado inválido');
+      throw new HttpsError('failed-precondition', 'El reporte no está pendiente de aprobación');
     }
 
     const now = new Date();
@@ -550,15 +736,13 @@ exports.guideApproveReport = onCall({
 
     await db.collection('guide_invoices').doc(data.invoiceId).update({
       status: 'WAITING_INVOICE_UPLOAD',
-      guideApprovedReportAt: FieldValue.serverTimestamp(),
+      guideApprovedAt: FieldValue.serverTimestamp(),
       uploadDeadline: deadline,
       updatedAt: FieldValue.serverTimestamp()
     });
 
-    sgMail.setApiKey(sendgridKey.value());
-    await sgMail.send({
+    await sendEmail({
       to: invoice.guideEmail,
-      from: { email: FROM_EMAIL, name: FROM_NAME },
       subject: `Reporte aprobado - Sube tu factura VERIFACTU`,
       html: getEmailTemplate(`
         <h2>Reporte aprobado ✓</h2>
@@ -578,6 +762,21 @@ exports.guideApproveReport = onCall({
         </a>
       `)
     });
+
+    try {
+      await sendEmail({
+        to: MANAGER_EMAIL,
+        subject: `Reporte APROBADO por guía: ${invoice.guideName} - ${invoice.month}`,
+        html: getEmailTemplate(`
+          <h2>Reporte aprobado</h2>
+          <p>El guía <strong>${invoice.guideName}</strong> ha aprobado su reporte de <strong>${invoice.month}</strong>.</p>
+          <p>Ahora tiene 48h para subir la factura oficial en PDF.</p>
+          <a href="${APP_URL}/manager-invoices.html" class="button">Ver Panel Manager</a>
+        `)
+      });
+    } catch (mailError) {
+      logger.error('Error notificando aprobación al manager', { error: mailError.message });
+    }
 
     logger.info('Reporte aprobado por guía', {
       invoiceId: data.invoiceId,
@@ -610,7 +809,7 @@ exports.guideApproveReport = onCall({
 // =========================================
 exports.guideRejectReport = onCall({
   cors: true,
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async (request) => {
   const { data, auth } = request;
 
@@ -654,10 +853,8 @@ exports.guideRejectReport = onCall({
       updatedAt: FieldValue.serverTimestamp()
     });
 
-    sgMail.setApiKey(sendgridKey.value());
-    await sgMail.send({
+    await sendEmail({
       to: MANAGER_EMAIL,
-      from: { email: FROM_EMAIL, name: FROM_NAME },
       subject: `Reporte rechazado por guía: ${invoice.guideName}`,
       html: getEmailTemplate(`
         <h2>Reporte rechazado</h2>
@@ -701,7 +898,7 @@ exports.guideRejectReport = onCall({
 // FUNCTION: uploadOfficialInvoice
 // =========================================
 exports.uploadOfficialInvoice = onCall({
-  secrets: [sendgridKey, appsScriptUrl]
+  secrets: [brevoKey, appsScriptUrl]
 }, async (request) => {
   const { data, auth } = request;
 
@@ -773,32 +970,36 @@ exports.uploadOfficialInvoice = onCall({
 
     await db.collection('guide_invoices').doc(data.invoiceId).update(updateData);
 
-    sgMail.setApiKey(sendgridKey.value());
-
-    // Solo enviar email al manager para revisión, NO a contabilidad todavía
-    await sgMail.send({
-      to: MANAGER_EMAIL,
-      from: { email: FROM_EMAIL, name: FROM_NAME },
-      subject: `Factura pendiente de revisión: ${invoice.guideName} - ${invoice.month}`,
-      html: getEmailTemplate(`
-        <h2>Nueva factura pendiente de revisión</h2>
-        <p><strong>Guía:</strong> ${invoice.guideName}</p>
-        ${data.invoiceNumber ? `<p><strong>Factura:</strong> ${data.invoiceNumber}</p>` : ''}
-        <p><strong>Mes:</strong> ${invoice.month}</p>
-        <p><strong>Total:</strong> ${invoice.totalSalary.toFixed(2)}€</p>
-        <p>Factura disponible en Drive y adjunta en este email.</p>
-        <div class="alert">
-          <p><strong>⚠️ Acción requerida:</strong> Revisa la factura y apruébala o recházala desde el panel de manager.</p>
-        </div>
-        <a href="${APP_URL}/manager-invoices.html" class="button">Ver Facturas Pendientes</a>
-      `),
-      attachments: [{
-        content: data.pdfBase64,
-        filename: `${invoice.guideName}_${invoice.month}_${invoiceNumber.replace('/', '-')}.pdf`,
-        type: 'application/pdf',
-        disposition: 'attachment'
-      }]
-    });
+    try {
+      await sendEmail({
+        to: MANAGER_EMAIL,
+        subject: `Factura pendiente de revisión: ${invoice.guideName} - ${invoice.month}`,
+        html: getEmailTemplate(`
+          <h2>Nueva factura pendiente de revisión</h2>
+          <p><strong>Guía:</strong> ${invoice.guideName}</p>
+          ${data.invoiceNumber ? `<p><strong>Factura:</strong> ${data.invoiceNumber}</p>` : ''}
+          <p><strong>Mes:</strong> ${invoice.month}</p>
+          <p><strong>Total:</strong> ${invoice.totalSalary.toFixed(2)}€</p>
+          <p>Factura disponible en Drive y adjunta en este email.</p>
+          <div class="alert">
+            <p><strong>⚠️ Acción requerida:</strong> Revisa la factura y apruébala o recházala desde el panel de manager.</p>
+          </div>
+          <a href="${APP_URL}/manager-invoices.html" class="button">Ver Facturas Pendientes</a>
+        `),
+        attachments: [{
+          content: data.pdfBase64,
+          filename: `${invoice.guideName}_${invoice.month}_${invoiceNumber.replace('/', '-')}.pdf`,
+          type: 'application/pdf',
+          disposition: 'attachment'
+        }]
+      });
+      logger.info('Notificación de factura subida enviada al manager');
+    } catch (mailError) {
+      logger.warn('No se pudo enviar la notificación de factura subida (posible falta de créditos SendGrid)', {
+        error: mailError.message
+      });
+      // No lanzamos error, el proceso de subida ya se completó en DB y Drive
+    }
 
     logger.info('Factura subida y pendiente de revisión del manager', {
       invoiceId: data.invoiceId,
@@ -833,7 +1034,7 @@ exports.uploadOfficialInvoice = onCall({
 exports.checkUploadDeadlines = onSchedule({
   schedule: '0 9 * * *',
   timeZone: 'Europe/Madrid',
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async () => {
   logger.info('Verificando deadlines de subida de facturas');
 
@@ -878,10 +1079,8 @@ exports.checkUploadDeadlines = onSchedule({
             (vencido: ${n.deadline.toLocaleString('es-ES')})</li>`
       ).join('');
 
-      sgMail.setApiKey(sendgridKey.value());
-      await sgMail.send({
+      await sendEmail({
         to: MANAGER_EMAIL,
-        from: { email: FROM_EMAIL, name: FROM_NAME },
         subject: `${notifications.length} factura(s) no subidas - Plazo vencido`,
         html: getEmailTemplate(`
           <h2>Facturas con plazo vencido</h2>
@@ -1069,7 +1268,7 @@ exports.calculateSalaryPreview = onCall(async (request) => {
 // FUNCTION: managerApproveInvoice
 // =========================================
 exports.managerApproveInvoice = onCall({
-  secrets: [sendgridKey]
+  secrets: [brevoKey]
 }, async (request) => {
   const { data, auth } = request;
 
@@ -1077,22 +1276,23 @@ exports.managerApproveInvoice = onCall({
     throw new HttpsError('permission-denied', 'Solo managers');
   }
 
+  const db = getFirestore();
+
   if (!data.invoiceId) {
     throw new HttpsError('invalid-argument', 'invoiceId requerido');
   }
 
   try {
-    const db = getFirestore();
     const invoiceSnap = await db.collection('guide_invoices').doc(data.invoiceId).get();
 
     if (!invoiceSnap.exists) {
-      throw new HttpsError('not-found', 'Factura no encontrada');
+      throw new HttpsError('not-found', 'Reporte no encontrado');
     }
 
     const invoice = invoiceSnap.data();
 
     if (invoice.status !== 'PENDING_MANAGER_VERIFICATION') {
-      throw new HttpsError('failed-precondition', 'La factura no está pendiente de revisión');
+      throw new HttpsError('failed-precondition', 'La factura no está pendiente de verificación');
     }
 
     // Actualizar estado a APPROVED
@@ -1102,42 +1302,47 @@ exports.managerApproveInvoice = onCall({
       updatedAt: FieldValue.serverTimestamp()
     });
 
-    sgMail.setApiKey(sendgridKey.value());
+    try {
+      // Obtener el PDF de Drive si existe
+      const driveUrl = invoice.officialInvoicePdfUrl
+        ? `https://drive.google.com/file/d/${invoice.officialInvoicePdfUrl}/view`
+        : null;
 
-    // Obtener el PDF de Drive si existe
-    const driveUrl = invoice.officialInvoicePdfUrl
-      ? `https://drive.google.com/file/d/${invoice.officialInvoicePdfUrl}/view`
-      : null;
+      // Enviar emails a contabilidad y guía
+      await Promise.all([
+        sendEmail({
+          to: ACCOUNTING_EMAIL,
+          subject: `Factura guía ${invoice.guideName} - ${invoice.month}`,
+          html: getEmailTemplate(`
+            <h2>Nueva factura guía aprobada</h2>
+            <p><strong>Guía:</strong> ${invoice.guideName}</p>
+            <p><strong>DNI:</strong> ${invoice.guideDni}</p>
+            ${invoice.officialInvoiceNumber ? `<p><strong>Número Factura:</strong> ${invoice.officialInvoiceNumber}</p>` : ''}
+            <p><strong>Mes:</strong> ${invoice.month}</p>
+            <p><strong>Total servicios:</strong> ${invoice.totalSalary.toFixed(2)}€</p>
+            <p>Revisa la factura en Drive:</p>
+            ${driveUrl ? `<a href="${driveUrl}" class="button">Ver Factura en Drive</a>` : '<p>PDF no disponible</p>'}
+          `)
+        }),
 
-    // Enviar emails a contabilidad y guía
-    await Promise.all([
-      sgMail.send({
-        to: ACCOUNTING_EMAIL,
-        from: { email: FROM_EMAIL, name: FROM_NAME },
-        subject: `Factura guía ${invoice.guideName} - ${invoice.month}`,
-        html: getEmailTemplate(`
-          <h2>Nueva factura guía aprobada</h2>
-          <p><strong>Guía:</strong> ${invoice.guideName}</p>
-          <p><strong>DNI:</strong> ${invoice.guideDni}</p>
-          ${invoice.officialInvoiceNumber ? `<p><strong>Número Factura:</strong> ${invoice.officialInvoiceNumber}</p>` : ''}
-          <p><strong>Mes:</strong> ${invoice.month}</p>
-          <p><strong>Total servicios:</strong> ${invoice.totalSalary.toFixed(2)}€</p>
-          <p>Revisa la factura en Drive:</p>
-          ${driveUrl ? `<a href="${driveUrl}" class="button">Ver Factura en Drive</a>` : '<p>PDF no disponible</p>'}
-        `)
-      }),
-
-      sgMail.send({
-        to: invoice.guideEmail,
-        from: { email: FROM_EMAIL, name: FROM_NAME },
-        subject: `Factura ${invoice.month} aprobada ✓`,
-        html: getEmailTemplate(`
-          <h2>✅ Tu factura ha sido aprobada</h2>
-          <p>Tu factura del mes <strong>${invoice.month}</strong> ha sido aprobada por el manager.</p>
-          <p>El equipo de contabilidad la procesará en breve.</p>
-        `)
-      })
-    ]);
+        sendEmail({
+          to: invoice.guideEmail,
+          subject: `Factura ${invoice.month} aprobada ✓`,
+          html: getEmailTemplate(`
+            <h2>✅ Tu factura ha sido aprobada</h2>
+            <p>Tu factura del mes <strong>${invoice.month}</strong> ha sido aprobada por el manager.</p>
+            <p>El equipo de contabilidad la procesará en breve.</p>
+          `)
+        })
+      ]);
+      logger.info('Notificaciones de aprobación enviadas (Brevo)');
+    } catch (mailError) {
+      logger.error('Error enviando notificaciones de aprobación', { error: mailError.message });
+      return {
+        success: true,
+        warning: 'Factura aprobada en sistema, pero fallaron los emails de notificación.'
+      };
+    }
 
     logger.info('Factura aprobada por manager y enviada a contabilidad', {
       invoiceId: data.invoiceId,
@@ -1145,10 +1350,7 @@ exports.managerApproveInvoice = onCall({
       month: invoice.month
     });
 
-    return {
-      success: true,
-      message: 'Factura aprobada y enviada a contabilidad'
-    };
+    return { success: true };
 
   } catch (error) {
     logger.error('Error aprobando factura', {
@@ -1168,7 +1370,7 @@ exports.managerApproveInvoice = onCall({
 // FUNCTION: managerRejectInvoice
 // =========================================
 exports.managerRejectInvoice = onCall({
-  secrets: [sendgridKey, appsScriptUrl]
+  secrets: [brevoKey, appsScriptUrl]
 }, async (request) => {
   const { data, auth } = request;
 
@@ -1176,36 +1378,24 @@ exports.managerRejectInvoice = onCall({
     throw new HttpsError('permission-denied', 'Solo managers');
   }
 
+  const db = getFirestore();
+
   if (!data.invoiceId || !data.comments) {
     throw new HttpsError('invalid-argument', 'invoiceId y comments requeridos');
   }
 
   try {
-    const db = getFirestore();
     const invoiceSnap = await db.collection('guide_invoices').doc(data.invoiceId).get();
 
     if (!invoiceSnap.exists) {
-      throw new HttpsError('not-found', 'Factura no encontrada');
+      throw new HttpsError('not-found', 'Reporte no encontrado');
     }
 
     const invoice = invoiceSnap.data();
 
     if (invoice.status !== 'PENDING_MANAGER_VERIFICATION') {
-      throw new HttpsError('failed-precondition', 'La factura no está pendiente de revisión');
+      throw new HttpsError('failed-precondition', 'La factura no está pendiente de verificación');
     }
-
-    // >>> DEBUG START: Log invoice state to Firestore
-    const debugId = `rej_${data.invoiceId}_${Date.now()}`;
-    // db is already declared above
-    await db.collection('system_debug_logs').doc(debugId).set({
-      function: 'managerRejectInvoice',
-      invoiceId: data.invoiceId,
-      invoiceDataRaw: invoice,
-      hasPdfUrl: !!invoice.officialInvoicePdfUrl,
-      pdfUrlValue: invoice.officialInvoicePdfUrl || 'UNDEFINED',
-      timestamp: FieldValue.serverTimestamp()
-    });
-    // >>> DEBUG END
 
     // Eliminar el archivo de Drive si existe
     if (invoice.officialInvoicePdfUrl) {
@@ -1226,21 +1416,12 @@ exports.managerRejectInvoice = onCall({
           fileId: invoice.officialInvoicePdfUrl,
           error: driveError.message
         });
-
-        await db.collection('system_debug_logs').doc(debugId).update({
-          errorInCatch: driveError.message
-        });
       }
-    } else {
-      await db.collection('system_debug_logs').doc(debugId).update({
-        skippedDeletion: true,
-        reason: 'officialInvoicePdfUrl is falsy'
-      });
     }
 
-    // Actualizar estado a WAITING_INVOICE_UPLOAD (para que el guía vuelva a subir)
+    // Actualizar estado a REJECTED
     await db.collection('guide_invoices').doc(data.invoiceId).update({
-      status: 'WAITING_INVOICE_UPLOAD',
+      status: 'REJECTED',
       officialInvoicePdfUrl: FieldValue.delete(),  // Eliminar referencia al PDF rechazado
       officialInvoiceNumber: FieldValue.delete(),
       officialInvoiceUploadedAt: FieldValue.delete(),
@@ -1249,24 +1430,30 @@ exports.managerRejectInvoice = onCall({
       updatedAt: FieldValue.serverTimestamp()
     });
 
-    sgMail.setApiKey(sendgridKey.value());
-
-    // Notificar al guía del rechazo
-    await sgMail.send({
-      to: invoice.guideEmail,
-      from: { email: FROM_EMAIL, name: FROM_NAME },
-      subject: `⚠️ Factura ${invoice.month} rechazada - Acción requerida`,
-      html: getEmailTemplate(`
-        <h2>⚠️ Tu factura ha sido rechazada</h2>
-        <p>Tu factura del mes <strong>${invoice.month}</strong> ha sido rechazada por el siguientemotivo:</p>
-        <div class="alert">
-          <p><strong>Motivo del rechazo:</strong></p>
-          <p>${data.comments}</p>
-        </div>
-        <p>Por favor, corrige el problema y sube una nueva factura.</p>
-        <a href="${APP_URL}/my-invoices.html" class="button">Subir Nueva Factura</a>
-      `)
-    });
+    try {
+      // Notificar al guía del rechazo
+      await sendEmail({
+        to: invoice.guideEmail,
+        subject: `⚠️ Factura ${invoice.month} rechazada - Acción requerida`,
+        html: getEmailTemplate(`
+          <h2>⚠️ Tu factura ha sido rechazada</h2>
+          <p>Tu factura del mes <strong>${invoice.month}</strong> ha sido rechazada por el siguiente motivo:</p>
+          <div class="alert">
+            <p><strong>Motivo del rechazo:</strong></p>
+            <p>${data.comments}</p>
+          </div>
+          <p>Por favor, corrige el problema y sube una nueva factura.</p>
+          <a href="${APP_URL}/my-invoices.html" class="button">Subir Nueva Factura</a>
+        `)
+      });
+      logger.info('Notificación de rechazo enviada al guía');
+    } catch (mailError) {
+      logger.error('Error notificando rechazo al guía', { error: mailError.message });
+      return {
+        success: true,
+        warning: 'Factura rechazada en sistema, pero falló el email de notificación al guía.'
+      };
+    }
 
     logger.info('Factura rechazada por manager', {
       invoiceId: data.invoiceId,
@@ -1275,10 +1462,7 @@ exports.managerRejectInvoice = onCall({
       comments: data.comments
     });
 
-    return {
-      success: true,
-      message: 'Factura rechazada. El guía ha sido notificado.'
-    };
+    return { success: true };
 
   } catch (error) {
     logger.error('Error rechazando factura', {
@@ -1384,7 +1568,7 @@ async function deleteFromGoogleDrive(fileId) {
 exports.checkMissingCosts = onSchedule({
   schedule: '0 9 * * *',
   timeZone: 'Europe/Madrid',
-  secrets: [sendgridKey, appsScriptUrl]
+  secrets: [brevoKey, appsScriptUrl]
 }, async (event) => {
   const DRY_RUN = false; // ENABLED REAL EMAILS
   const db = getFirestore();
@@ -1407,7 +1591,7 @@ exports.checkMissingCosts = onSchedule({
     const APPS_SCRIPT_URL = appsScriptUrl.value();
     if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL not configured');
 
-    const toursResponse = await fetch(`${APPS_SCRIPT_URL}?endpoint=getAssignedTours&startDate=${targetDate}&endDate=${targetDate}&apiKey=${process.env.API_KEY || 'sfs-calendar-2024-secure-key'}`);
+    const toursResponse = await fetch(`${APPS_SCRIPT_URL}?endpoint=getAssignedTours&startDate=${targetDate}&endDate=${targetDate}&apiKey=${appsScriptKey.value()}`);
 
     if (!toursResponse.ok) {
       throw new Error(`Apps Script Error: ${toursResponse.statusText}`);
@@ -1467,8 +1651,6 @@ exports.checkMissingCosts = onSchedule({
 
     // 4. Send Emails (or Log)
     if (missingReports.length > 0) {
-      sgMail.setApiKey(sendgridKey.value());
-
       for (const report of missingReports) {
         if (DRY_RUN) {
           logger.info(`[DRY RUN] Would send email to ${report.guideEmail} for ${report.tourName}`);
@@ -1476,9 +1658,8 @@ exports.checkMissingCosts = onSchedule({
         }
 
         try {
-          await sgMail.send({
+          await sendEmail({
             to: report.guideEmail,
-            from: { email: FROM_EMAIL, name: FROM_NAME },
             subject: `⚠️ Falta registro de costes: ${report.tourName} (${report.date})`,
             html: getEmailTemplate(`
                         <h2>Recordatorio de Costes Pendientes</h2>

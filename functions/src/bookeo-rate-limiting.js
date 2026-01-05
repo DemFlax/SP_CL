@@ -25,14 +25,13 @@ const { logger } = require("firebase-functions/v2");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getFunctions } = require("firebase-admin/functions");
 const { defineSecret } = require("firebase-functions/params");
-const sgMail = require("@sendgrid/mail");
 const axios = require("axios");
 const crypto = require("crypto");
 
 // =========================================
 // CONFIGURACIÓN
 // =========================================
-const sendgridKey = defineSecret("SENDGRID_API_KEY");
+const brevoKey = defineSecret("BREVO_API_KEY");
 
 // URL Webhook Make
 const MAKE_WEBHOOK_URL =
@@ -76,7 +75,7 @@ exports.bookeoWebhookWorker = onTaskDispatched(
     memory: "512MB",
     timeoutSeconds: 180,
     region: "us-central1",
-    secrets: [sendgridKey],
+    secrets: [brevoKey],
   },
   async (req) => {
     const { action, payload, shiftId, emailData } = req.data;
@@ -103,19 +102,22 @@ exports.bookeoWebhookWorker = onTaskDispatched(
       // 2. Email (si aplica)
       if (emailData) {
         try {
-          sgMail.setApiKey(sendgridKey.value());
-          await sgMail.send({
-            to: MANAGER_EMAIL,
-            from: { email: FROM_EMAIL, name: FROM_NAME },
+          const apiKey = brevoKey.value();
+          await axios.post('https://api.brevo.com/v3/smtp/email', {
+            sender: { name: FROM_NAME, email: FROM_EMAIL },
+            to: [{ email: MANAGER_EMAIL }],
             subject: emailData.subject,
-            html: emailData.html,
+            htmlContent: emailData.html
+          }, {
+            headers: {
+              'api-key': apiKey,
+              'Content-Type': 'application/json'
+            }
           });
           emailStatus = "sent";
         } catch (emailError) {
-          // No reintentamos toda la tarea si el email falla para evitar
-          // reenviar el bloqueo/desbloqueo a Bookeo múltiples veces.
           emailStatus = "failed";
-          logger.error("Error enviando email de Bookeo", emailError);
+          logger.error("Error enviando email de Bookeo (Brevo)", emailError.response?.data || emailError.message);
         }
       }
 
@@ -441,7 +443,7 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
   {
     document: "guides/{guideId}/shifts/{shiftId}",
     region: "us-central1",
-    secrets: [sendgridKey],
+    secrets: [brevoKey],
   },
   async (event) => {
     const before = event.data.before.data();
@@ -727,15 +729,17 @@ async function checkAndSetEmailState(db, docId, valueToCheck) {
  */
 async function slotTieneTour(db, fecha, slot) {
   const guides = await db.collection("guides").where("estado", "==", "activo").get();
-  for (const doc of guides.docs) {
-    const shift = await db
-      .collection("guides")
-      .doc(doc.id)
-      .collection("shifts")
-      .doc(`${fecha}_${slot}`)
-      .get();
+  if (guides.empty) return false;
+
+  const shiftRefs = guides.docs.map(doc =>
+    db.collection("guides").doc(doc.id).collection("shifts").doc(`${fecha}_${slot}`)
+  );
+
+  const shiftSnaps = await db.getAll(...shiftRefs);
+
+  for (const shift of shiftSnaps) {
     if (shift.exists && shift.data().estado === "ASIGNADO") {
-      logger.info("🔍 Tour detectado - NO se bloqueará", { fecha, slot, guideId: doc.id });
+      logger.info("🔍 Tour detectado - NO se bloqueará", { fecha, slot, shiftId: shift.id });
       return true;
     }
   }
@@ -747,17 +751,22 @@ async function calcularDisponibilidadSlot(db, fecha, slot) {
     .collection("guides")
     .where("estado", "==", "activo")
     .get();
+
+  if (snapshot.empty) return { unavailableCount: 0, debeBloquear: false, debeDesbloquear: false };
+
+  const shiftRefs = snapshot.docs.map(doc =>
+    db.collection("guides").doc(doc.id).collection("shifts").doc(`${fecha}_${slot}`)
+  );
+
+  const shiftSnaps = await db.getAll(...shiftRefs);
   let unavailableCount = 0;
-  for (const doc of snapshot.docs) {
-    const shift = await db
-      .collection("guides")
-      .doc(doc.id)
-      .collection("shifts")
-      .doc(`${fecha}_${slot}`)
-      .get();
-    if (shift.exists && (shift.data().estado === "NO_DISPONIBLE" || shift.data().estado === "ASIGNADO"))
+
+  for (const shift of shiftSnaps) {
+    if (shift.exists && (shift.data().estado === "NO_DISPONIBLE" || shift.data().estado === "ASIGNADO")) {
       unavailableCount++;
+    }
   }
+
   return {
     unavailableCount,
     debeBloquear: unavailableCount === snapshot.size,
@@ -770,23 +779,39 @@ async function calcularDisponibilidadTarde(db, fecha) {
     .collection("guides")
     .where("estado", "==", "activo")
     .get();
-  let blocked = 0;
-  for (const doc of snapshot.docs) {
-    let disp = true;
-    for (const s of TARDE_SLOTS) {
-      const shift = await db
-        .collection("guides")
-        .doc(doc.id)
-        .collection("shifts")
-        .doc(`${fecha}_${s}`)
-        .get();
-      if (shift.exists && (shift.data().estado === "NO_DISPONIBLE" || shift.data().estado === "ASIGNADO")) {
-        disp = false;
-        break;
-      }
-    }
-    if (!disp) blocked++;
+
+  if (snapshot.empty) {
+    return { guidesDisponiblesTarde: 0, debeBloquear: false, debeDesbloquear: false };
   }
+
+  const shiftRefs = [];
+  snapshot.docs.forEach(doc => {
+    TARDE_SLOTS.forEach(s => {
+      shiftRefs.push(db.collection("guides").doc(doc.id).collection("shifts").doc(`${fecha}_${s}`));
+    });
+  });
+
+  const shiftSnaps = await db.getAll(...shiftRefs);
+
+  // Agrupamos por guía para verificar si alguno de sus slots está bloqueado
+  const shiftsByGuide = {};
+  shiftSnaps.forEach(snap => {
+    // Extraemos guideId de la ruta del documento: guides/{guideId}/shifts/{shiftId}
+    const pathParts = snap.ref.path.split('/');
+    const guideId = pathParts[1];
+    if (!shiftsByGuide[guideId]) shiftsByGuide[guideId] = [];
+    shiftsByGuide[guideId].push(snap);
+  });
+
+  let blocked = 0;
+  for (const guideId in shiftsByGuide) {
+    const guideShifts = shiftsByGuide[guideId];
+    const isActuallyBlocked = guideShifts.some(snap =>
+      snap.exists && (snap.data().estado === "NO_DISPONIBLE" || snap.data().estado === "ASIGNADO")
+    );
+    if (isActuallyBlocked) blocked++;
+  }
+
   const disp = snapshot.size - blocked;
   return {
     guidesDisponiblesTarde: disp,

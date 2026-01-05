@@ -402,6 +402,13 @@ window.openEditModal = async function (invoiceId) {
   const saveBtn = document.getElementById('save-btn');
   saveBtn.textContent = t('saveBtn');
 
+  const refreshBtn = document.getElementById('refresh-report-btn');
+  if (invoice.status === 'MANAGER_REVIEW' || invoice.status === 'REJECTED') {
+    refreshBtn.style.display = 'block';
+  } else {
+    refreshBtn.style.display = 'none';
+  }
+
   const sendBtn = document.getElementById('send-to-guide-btn');
   // Permitir editar si está en MANAGER_REVIEW, REJECTED o PENDING_GUIDE_APPROVAL
   if (
@@ -542,6 +549,47 @@ document.getElementById('save-btn').addEventListener('click', async () => {
   } finally {
     saveBtn.disabled = false;
     saveBtn.textContent = t('saveBtn');
+  }
+});
+
+document.getElementById('refresh-report-btn').addEventListener('click', async () => {
+  if (!currentInvoice) return;
+
+  const refreshBtn = document.getElementById('refresh-report-btn');
+  refreshBtn.disabled = true;
+  const originalText = refreshBtn.innerHTML;
+  refreshBtn.textContent = 'Actualizando...';
+
+  showToast('Actualizando reporte...', 'info');
+
+  try {
+    const refreshGuideInvoice = httpsCallable(functions, 'refreshGuideInvoice');
+    const result = await refreshGuideInvoice({
+      invoiceId: currentInvoice.id
+    });
+
+    if (result.data.success) {
+      showToast(`✓ Reporte actualizado: ${result.data.count} tours detectados`, 'success');
+      // No cerramos el modal, sino que dejamos que onSnapshot de Firebase (o una recarga manual) 
+      // actualice allInvoices y re-abrimos para ver los nuevos datos. 
+      // En este caso, como allInvoices se actualiza vía onSnapshot, buscamos la nueva versión.
+      setTimeout(() => {
+        const updated = allInvoices.find(i => i.id === currentInvoice.id);
+        if (updated) {
+          currentInvoice = updated;
+          renderToursTable();
+          updateModalTotal();
+        }
+      }, 500);
+    } else {
+      showToast(result.data.message || 'No se encontraron nuevos datos', 'info');
+    }
+  } catch (error) {
+    console.error('Error refreshing report:', error);
+    showToast('Error al actualizar: ' + error.message, 'error');
+  } finally {
+    refreshBtn.disabled = false;
+    refreshBtn.innerHTML = originalText;
   }
 });
 
