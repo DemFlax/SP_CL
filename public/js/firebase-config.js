@@ -12,7 +12,7 @@ const firebaseConfig = {
 };
 
 export const appsScriptConfig = {
-  url: 'https://script.google.com/macros/s/AKfycbzpPpJtL8VZ258sKzERCNRlFpsfCrCmdFO7T_wQYjoqw-1aLz1mpcYp8kab39xwMPmiww/exec',
+  url: 'https://script.google.com/macros/s/AKfycby2fXR2n4kLnItxvg-cVXSus2zUrl54dbJvbs5Y820IKzWAssKp3ZD-EPZgafFnK3O87A/exec',
   apiKey: 'sfs-calendar-2024-secure-key'
 };
 

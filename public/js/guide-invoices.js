@@ -204,17 +204,29 @@ function buildDriveViewUrl(fileId) {
   return `https://drive.google.com/file/d/${fileId}/view`;
 }
 
+// ✅ CAPTURAR IMPERSONACIÓN INMEDIATAMENTE
+const IMPERSONATE_ID = new URLSearchParams(window.location.search).get('impersonate');
+console.log('🔍 INVOICES: IMPERSONATE_ID capturado:', IMPERSONATE_ID);
+
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
     const token = await user.getIdTokenResult(true);
-    currentGuideId = token.claims.guideId;
 
-    if (!currentGuideId) {
-      alert('No tienes permisos de guía');
-      await signOut(auth);
-      window.location.href = '/login.html';
-      return;
+    // ✅ LOGIC: Si hay impersonate ID y soy Manager -> SOY DIOS
+    if (IMPERSONATE_ID && token.claims.role === 'manager') {
+      currentGuideId = IMPERSONATE_ID;
+      showImpersonationBanner(); // Mostrar aviso visual
+    } else {
+      // Comportamiento normal
+      currentGuideId = token.claims.guideId;
+
+      if (!currentGuideId) {
+        alert('No tienes permisos de guía');
+        await signOut(auth);
+        window.location.href = '/login.html';
+        return;
+      }
     }
 
     const guideDoc = await getDoc(doc(db, 'guides', currentGuideId));
@@ -234,6 +246,35 @@ onAuthStateChanged(auth, async (user) => {
     window.location.href = '/login.html';
   }
 });
+
+function showImpersonationBanner() {
+  const nav = document.querySelector('nav');
+  // Evitar duplicados
+  if (document.getElementById('impersonation-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'impersonation-banner';
+  banner.className = 'bg-yellow-500 text-gray-900 px-4 py-3 flex items-center justify-between shadow-lg mb-4';
+  banner.innerHTML = `
+    <div class="flex items-center gap-2">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+      </svg>
+      <span class="font-semibold text-sm sm:text-base">Viendo facturas de: <span class="font-bold">${guideName}</span> (Modo Manager)</span>
+    </div>
+    <button onclick="window.location.href='/manager.html'" class="bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
+      Volver al Manager
+    </button>
+  `;
+
+  // Insertar después del nav o al principio del body si no hay nav
+  if (nav) {
+    nav.insertAdjacentElement('afterend', banner);
+  } else {
+    document.body.prepend(banner);
+  }
+}
 
 function updateUILanguage() {
   document.getElementById('page-title').textContent = `${t('pageTitle')} - ${guideName}`;
@@ -267,7 +308,14 @@ function updateUILanguage() {
   document.getElementById('pdf-help-text').textContent = t('pdfHelpText');
   document.getElementById('cancel-upload-btn').textContent = t('cancelBtn');
   document.getElementById('confirm-upload-btn').textContent = t('confirmUploadBtn');
-  document.querySelector('a[href="/guide.html"]').textContent = t('calendar');
+  // ✅ Maintain context in back button
+  const calendarLink = document.querySelector('a[href="/guide.html"]');
+  if (calendarLink) {
+    calendarLink.textContent = t('calendar');
+    if (IMPERSONATE_ID) {
+      calendarLink.href = `/guide.html?impersonate=${IMPERSONATE_ID}`;
+    }
+  }
   document.getElementById('logout-btn').textContent = t('logout');
 }
 

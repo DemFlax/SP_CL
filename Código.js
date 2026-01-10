@@ -1217,43 +1217,58 @@ function getVendorCosts(e) {
       endDate
     );
 
-    const response = Sheets.Spreadsheets.Values.get(
-      VENDORS_SHEET_ID,
-      'A:I'
-    );
-    const data = response.values || [];
+    // 1. Obtener todas las hojas del spreadsheet
+    const spreadsheet = Sheets.Spreadsheets.get(VENDORS_SHEET_ID);
+    const ranges = spreadsheet.sheets.map(sheet => `'${sheet.properties.title}'!A:I`);
+
+    // 2. Leer todas las hojas en una sola llamada (Batch Get)
+    const response = Sheets.Spreadsheets.Values.batchGet(VENDORS_SHEET_ID, {
+      ranges: ranges
+    });
+    const valueRanges = response.valueRanges || [];
+    const data = []; // Array vacio para compatibilidad temporal (el bucle se sustituirá a continuación)
 
     Logger.log('Total rows from sheet: ' + data.length);
 
     const costs = [];
 
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      if (!row || row.length < 6) continue;
+    // 3. Procesar cada hoja
+    valueRanges.forEach(range => {
+      const rows = range.values;
+      if (!rows || rows.length < 2) return; // Skip empty or header-only sheets
 
-      let fechaStr = row[1] || '';
-      if (typeof fechaStr !== 'string') {
-        fechaStr = String(fechaStr);
+      // Empezamos desde i=1 para saltar la cabecera de cada hoja
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length < 6) continue;
+
+        let fechaStr = row[1] || '';
+        if (typeof fechaStr !== 'string') {
+          fechaStr = String(fechaStr);
+        }
+
+        const cost = {
+          timestamp: row[0] || '',
+          fecha: fechaStr,
+          slot: row[2] || '',
+          guideName: row[3] || '',
+          numPax: row[4] || 0,
+          vendorName: row[5] || '',
+          importe: row[6] || 0,
+          ticketUrl: row[7] || '',
+          feedback: row[8] || ''
+        };
+
+        // Normalizar nombre del sheet (ignorar numero inicial "7 El Escarpín" -> "El Escarpín")
+        const sheetVendorName = cost.vendorName.replace(/^\d+\s+/, '');
+
+        if (vendorName && sheetVendorName !== vendorName && cost.vendorName !== vendorName) continue;
+        if (startDate && cost.fecha < startDate) continue;
+        if (endDate && cost.fecha > endDate) continue;
+
+        costs.push(cost);
       }
-
-      const cost = {
-        timestamp: row[0] || '',
-        fecha: fechaStr,
-        slot: row[2] || '',
-        guideName: row[3] || '',
-        numPax: row[4] || 0,
-        vendorName: row[5] || '',
-        importe: row[6] || 0,
-        ticketUrl: row[7] || '',
-        feedback: row[8] || ''
-      };
-
-      if (vendorName && cost.vendorName !== vendorName) continue;
-      if (startDate && cost.fecha < startDate) continue;
-      if (endDate && cost.fecha > endDate) continue;
-
-      costs.push(cost);
-    }
+    });
 
     Logger.log('✅ Costs retrieved: ' + costs.length);
 

@@ -461,6 +461,12 @@ if (localStorage.getItem('darkMode') === 'true') {
 
 // Update vendor count
 function updateVendorCount() {
-  const count = document.getElementById('vendors-list').children.length;
-  document.getElementById('vendor-count').textContent = count;
+  const vendorsList = document.getElementById('vendors-list');
+  if (!vendorsList) return;
+
+  const count = vendorsList.children.length;
+  const countElement = document.getElementById('vendor-count');
+  if (countElement) {
+    countElement.textContent = count;
+  }
 }

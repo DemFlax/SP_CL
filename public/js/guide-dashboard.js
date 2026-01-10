@@ -158,6 +158,17 @@ function updateUILanguage() {
   if (invoicesLink) {
     const spanElement = invoicesLink.querySelector('span');
     if (spanElement) spanElement.textContent = t('invoices');
+
+    // ✅ Keep Impersonation Context
+    if (IMPERSONATE_ID) {
+      invoicesLink.href = `/my-invoices.html?impersonate=${IMPERSONATE_ID}`;
+    }
+  }
+
+  // Also update Profile link if it exists
+  const profileLink = document.querySelector('a[href="/profile.html"]');
+  if (profileLink && IMPERSONATE_ID) {
+    profileLink.href = `/profile.html?impersonate=${IMPERSONATE_ID}`;
   }
 
   const monthSelect = document.getElementById('month-select');
