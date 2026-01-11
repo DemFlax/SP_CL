@@ -1141,3 +1141,91 @@ exports.proxyGetAssignedTours = functions.runWith({
     throw new HttpsError('internal', error.message);
   }
 });
+
+// =========================================
+// PROXY 6: Get Unassigned Tours
+// =========================================
+exports.proxyGetUnassignedTours = functions.runWith({
+  secrets: ['APPS_SCRIPT_URL', 'APPS_SCRIPT_API_KEY']
+}).https.onCall(async (data, context) => {
+  const auth = context.auth;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Manager only');
+  }
+
+  if (!data.startDate || !data.endDate) {
+    throw new HttpsError('invalid-argument', 'startDate and endDate required');
+  }
+
+  try {
+    logger.info('Proxying getUnassignedTours', { startDate: data.startDate, endDate: data.endDate });
+
+    const response = await axios.post(process.env.APPS_SCRIPT_URL, {
+      action: 'getUnassignedTours',
+      apiKey: process.env.APPS_SCRIPT_API_KEY,
+      startDate: data.startDate,
+      endDate: data.endDate
+    }, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const result = response.data;
+
+    if (result.error) {
+      throw new Error(result.message || 'Error fetching unassigned tours');
+    }
+
+    logger.info('getUnassignedTours success', { count: result.tours?.length || 0 });
+
+    return result;
+
+  } catch (error) {
+    logger.error('Error in proxyGetUnassignedTours', { error: error.message });
+    throw new HttpsError('internal', error.message);
+  }
+});
+
+// =========================================
+// PROXY 7: Get Guide Assignment Count
+// =========================================
+exports.proxyGetGuideAssignmentCount = functions.runWith({
+  secrets: ['APPS_SCRIPT_URL', 'APPS_SCRIPT_API_KEY']
+}).https.onCall(async (data, context) => {
+  const auth = context.auth;
+
+  if (!auth || auth.token.role !== 'manager') {
+    throw new HttpsError('permission-denied', 'Manager only');
+  }
+
+  if (!data.startDate || !data.endDate) {
+    throw new HttpsError('invalid-argument', 'startDate and endDate required');
+  }
+
+  try {
+    logger.info('Proxying getGuideAssignmentCount', { startDate: data.startDate, endDate: data.endDate });
+
+    const response = await axios.post(process.env.APPS_SCRIPT_URL, {
+      action: 'getGuideAssignmentCount',
+      apiKey: process.env.APPS_SCRIPT_API_KEY,
+      startDate: data.startDate,
+      endDate: data.endDate
+    }, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const result = response.data;
+
+    if (result.error) {
+      throw new Error(result.message || 'Error fetching guide counts');
+    }
+
+    logger.info('getGuideAssignmentCount success', { guidesCount: Object.keys(result.counts || {}).length });
+
+    return result;
+
+  } catch (error) {
+    logger.error('Error in proxyGetGuideAssignmentCount', { error: error.message });
+    throw new HttpsError('internal', error.message);
+  }
+});

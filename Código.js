@@ -98,6 +98,17 @@ function doPost(e) {
       return checkEventsStatus(data);
     }
 
+    // ============================================
+    // UNASSIGNED TOURS ENDPOINTS
+    // ============================================
+    if (data.action === 'getUnassignedTours') {
+      return getUnassignedTours(data);
+    }
+
+    if (data.action === 'getGuideAssignmentCount') {
+      return getGuideAssignmentCount(data);
+    }
+
     return buildResponse({
       error: true,
       message:
@@ -1491,6 +1502,216 @@ function checkEventsStatus(params) {
     Logger.log('Stack: ' + err.stack);
     return buildResponse({
       error: true,
+      message: err.toString()
+    });
+  }
+}
+
+// ============================================
+// UNASSIGNED TOURS: Get tours without guides
+// ============================================
+function getUnassignedTours(params) {
+  try {
+    Logger.log('=== getUnassignedTours Request ===');
+
+    const apiKey = params.apiKey;
+    const storedKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
+
+    if (!apiKey || apiKey !== storedKey) {
+      Logger.log('ERROR: Invalid API Key');
+      return buildResponse({
+        error: true,
+        code: 'UNAUTHORIZED',
+        message: 'Invalid API key'
+      });
+    }
+
+    const startDate = params.startDate;
+    const endDate = params.endDate;
+
+    if (!startDate || !endDate) {
+      Logger.log('ERROR: Missing date parameters');
+      return buildResponse({
+        error: true,
+        code: 'INVALID_REQUEST',
+        message: 'Missing startDate or endDate'
+      });
+    }
+
+    Logger.log('Date range: ' + startDate + ' to ' + endDate);
+
+    // 1. Get all calendar events in the date range
+    const timeMin = new Date(startDate + 'T00:00:00');
+    const timeMax = new Date(endDate + 'T23:59:59');
+
+    const events = Calendar.Events.list(CALENDAR_ID, {
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250
+    });
+
+    Logger.log('Total events found: ' + (events.items ? events.items.length : 0));
+
+    const unassignedTours = [];
+
+    if (events.items && events.items.length > 0) {
+      events.items.forEach(function (event) {
+        if (!event.start || !event.start.dateTime) {
+          return;
+        }
+
+        // Extract event details
+        const eventDate = new Date(event.start.dateTime);
+        const fecha = eventDate.toISOString().split('T')[0];
+        const hours = String(eventDate.getHours()).padStart(2, '0');
+        const minutes = String(eventDate.getMinutes()).padStart(2, '0');
+        const startTime = hours + ':' + minutes;
+
+        // Determine slot
+        let slot = 'DESCONOCIDO';
+        if (startTime === '12:00') slot = 'MAÑANA';
+        else if (startTime === '17:15') slot = 'T1';
+        else if (startTime === '18:15') slot = 'T2';
+        else if (startTime === '19:15') slot = 'T3';
+
+        // Parse guests to extract PAX
+        const guests = parseGuestsFromDescription(event.description);
+        let totalPax = 0;
+        guests.forEach(function (guest) {
+          if (guest.pax) {
+            totalPax += guest.pax;
+          }
+        });
+
+        // Check if this tour has an assigned guide
+        // A tour has a guide if ANY attendee is a guide (not tripadvisor)
+        const hasGuide = event.attendees && event.attendees.some(function (att) {
+          return att.email && !att.email.includes('tripadvisor.com');
+        });
+
+        if (!hasGuide) {
+          unassignedTours.push({
+            eventId: event.id,
+            tourName: event.summary || 'Tour sin nombre',
+            fecha: fecha,
+            slot: slot,
+            startTime: startTime,
+            pax: totalPax,
+            htmlLink: event.htmlLink
+          });
+        }
+      });
+    }
+
+    Logger.log('✅ Unassigned tours found: ' + unassignedTours.length);
+
+    return buildResponse({
+      success: true,
+      tours: unassignedTours,
+      count: unassignedTours.length
+    });
+
+  } catch (err) {
+    Logger.log('ERROR getUnassignedTours: ' + err.toString());
+    Logger.log('Stack: ' + err.stack);
+    return buildResponse({
+      error: true,
+      code: 'FETCH_FAILED',
+      message: err.toString()
+    });
+  }
+}
+
+// ============================================
+// GUIDE ASSIGNMENT COUNT: Count tours per guide
+// ============================================
+function getGuideAssignmentCount(params) {
+  try {
+    Logger.log('=== getGuideAssignmentCount Request ===');
+
+    const apiKey = params.apiKey;
+    const storedKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
+
+    if (!apiKey || !apiKey !== storedKey) {
+      Logger.log('ERROR: Invalid API Key');
+      return buildResponse({
+        error: true,
+        code: 'UNAUTHORIZED',
+        message: 'Invalid API key'
+      });
+    }
+
+    const startDate = params.startDate;
+    const endDate = params.endDate;
+
+    if (!startDate || !endDate) {
+      Logger.log('ERROR: Missing date parameters');
+      return buildResponse({
+        error: true,
+        code: 'INVALID_REQUEST',
+        message: 'Missing startDate or endDate'
+      });
+    }
+
+    Logger.log('Date range: ' + startDate + ' to ' + endDate);
+
+    // Get all calendar events in the date range
+    const timeMin = new Date(startDate + 'T00:00:00');
+    const timeMax = new Date(endDate + 'T23:59:59');
+
+    const events = Calendar.Events.list(CALENDAR_ID, {
+      timeMin: timeMin.toISOString(),
+      timeMax: timeMax.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250
+    });
+
+    Logger.log('Total events found: ' + (events.items ? events.items.length : 0));
+
+    // Count tours per guide email
+    const guideCounts = {};
+
+    if (events.items && events.items.length > 0) {
+      events.items.forEach(function (event) {
+        if (!event.attendees || event.attendees.length === 0) {
+          return;
+        }
+
+        // Find guide attendees (not tripadvisor)
+        const guides = event.attendees.filter(function (att) {
+          return att.email && !att.email.includes('tripadvisor.com');
+        });
+
+        guides.forEach(function (guide) {
+          const email = guide.email;
+          if (!guideCounts[email]) {
+            guideCounts[email] = {
+              email: email,
+              name: guide.displayName || email.split('@')[0],
+              count: 0
+            };
+          }
+          guideCounts[email].count++;
+        });
+      });
+    }
+
+    Logger.log('✅ Guide counts calculated: ' + Object.keys(guideCounts).length + ' guides');
+
+    return buildResponse({
+      success: true,
+      counts: guideCounts
+    });
+
+  } catch (err) {
+    Logger.log('ERROR getGuideAssignmentCount: ' + err.toString());
+    Logger.log('Stack: ' + err.stack);
+    return buildResponse({
+      error: true,
+      code: 'FETCH_FAILED',
       message: err.toString()
     });
   }
