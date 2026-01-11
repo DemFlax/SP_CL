@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tours Pendientes - Manager Dashboard</title>
+
+    <meta name="theme-color" content="#0ea5e9">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SFS">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/assets/icon-192.png">
+
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+
+</head>
+
+<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+
+    <nav class="bg-gradient-to-r from-sky-600 to-blue-600 dark:from-gray-800 dark:to-gray-900 text-white shadow-xl">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold">Tours Calendar</h1>
+                    <p class="text-sky-100 dark:text-gray-400 text-xs sm:text-sm">Manager Dashboard</p>
+                </div>
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <button id="theme-toggle"
+                        class="p-2 sm:p-2.5 bg-sky-700/50 hover:bg-sky-800/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 rounded-lg transition-colors">
+                        <svg id="theme-icon-moon" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z">
+                            </path>
+                        </svg>
+                        <svg id="theme-icon-sun" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
+                            </path>
+                        </svg>
+                    </button>
+
+                    <a href="/manager.html"
+                        class="px-3 sm:px-4 py-2 sm:py-2.5 bg-sky-700/50 hover:bg-sky-800/50 rounded-lg font-semibold text-sm sm:text-base transition-colors">
+                        Volver
+                    </a>
+
+                    <button id="logout-btn"
+                        class="hidden md:block px-3 sm:px-4 py-2 sm:py-2.5 bg-red-600 hover:bg-red-700 rounded-lg font-semibold text-sm sm:text-base transition-colors">Salir</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-3 sm:p-4">
+        <section class="mt-4 sm:mt-6">
+
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Tours Pendientes de Asignación</h1>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            <span id="total-unassigned">0</span> tours sin guía asignado
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-state" class="text-center py-12">
+                <div class="inline-block w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin">
+                </div>
+                <p class="mt-4 text-gray-600 dark:text-gray-400">Cargando tours...</p>
+            </div>
+
+            <!-- Tours Container -->
+            <div id="tours-container" class="space-y-4 hidden">
+                <!-- Tours will be rendered here -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="hidden text-center py-12">
+                <div
+                    class="w-20 h-20 mx-auto bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
+                    <svg class="w-10 h-10 text-green-600 dark:text-green-400" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">¡Todo asignado!</h3>
+                <p class="text-gray-600 dark:text-gray-400">No hay tours pendientes de asignación</p>
+                <a href="/manager.html"
+                    class="inline-block mt-4 px-6 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-semibold transition-colors">
+                    Volver al Dashboard
+                </a>
+            </div>
+
+        </section>
+    </main>
+
+    <div id="toast"
+        class="hidden fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-xl shadow-lg max-w-xs sm:max-w-md z-50">
+        <p id="toast-message" class="text-xs sm:text-base"></p>
+    </div>
+
+    <script type="module" src="/js/manager-unassigned-tours.js"></script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(() => {
+                    navigator.serviceWorker.addEventListener('controllerchange', () => {
+                        window.location.reload();
+                    });
+                });
+        }
+    </script>
+    <!-- Pull to Refresh iOS PWA -->
+    <script src="/js/pulltorefresh.js"></script>
+    <!-- Theme Logic -->
+    <script type="module" src="/js/theme-toggle.js"></script>
+</body>
+
+</html>

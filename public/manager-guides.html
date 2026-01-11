@@ -49,7 +49,8 @@
       </div>
 
       <div class="hidden md:flex mt-6 gap-2 flex-wrap">
-        <a href="/manager.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+        <a href="/manager.html"
+          class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
@@ -65,8 +66,7 @@
           </svg>
           <span>Asignaciones</span>
         </a>
-        <a href="/manager-guides.html"
-          class="flex items-center gap-2 px-4 py-2.5 bg-white/20 rounded-lg font-semibold">
+        <a href="/manager-guides.html" class="flex items-center gap-2 px-4 py-2.5 bg-white/20 rounded-lg font-semibold">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
@@ -107,7 +107,8 @@
         </button>
       </div>
       <div class="p-4 space-y-2">
-        <a href="/manager.html" class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg text-white font-medium">
+        <a href="/manager.html"
+          class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg text-white font-medium">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
@@ -252,7 +253,7 @@
   <script type="module" src="/js/manager-guides.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js')
+      navigator.serviceWorker.register('/sw.js')
         .then(() => {
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             window.location.reload();

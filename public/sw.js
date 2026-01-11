@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sfs-calendar-v3';  // ← CAMBIAR DE v1 A v3
+const CACHE_NAME = 'sfs-calendar-v4'; // ← Bumping to v4 to force update
 const OFFLINE_PAGE = '/login.html';
 
 // Archivos críticos para cache
@@ -7,8 +7,7 @@ const CORE_ASSETS = [
   '/login.html',
   '/manager.html',
   '/guide.html',
-  '/css/tailwind.min.css',
-  '/js/auth.js',
+  // Removed missing files: tailwind.min.css, auth.js
   '/js/firebase-config.js',
   '/assets/icon-192.png',
   '/assets/icon-512.png',

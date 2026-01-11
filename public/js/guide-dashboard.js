@@ -513,13 +513,85 @@ async function unlockAfternoon(fecha) {
 }
 
 function showToast(message, type = 'info') {
-  const toast = document.getElementById('toast');
-  const toastMessage = document.getElementById('toast-message');
-  toastMessage.textContent = message;
-  toast.className = `fixed bottom-4 right-4 px-4 py-2 sm:px-6 sm:py-3 rounded-lg shadow-lg ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
-    } text-white text-sm sm:text-base`;
-  toast.classList.remove('hidden');
-  setTimeout(() => toast.classList.add('hidden'), 3000);
+  // Eliminar toast anterior si existe
+  const existingModal = document.getElementById('toast-modal');
+  if (existingModal) existingModal.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'toast-modal';
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn';
+
+  const isSuccess = type === 'success';
+  const isError = type === 'error';
+  const isLoading = type === 'loading';
+
+  let icon, btnClass, title;
+
+  if (isSuccess) {
+    title = t('successTitle') || 'Éxito';
+    icon = `<div class="w-16 h-16 sm:w-20 sm:h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5">
+      <svg class="w-8 h-8 sm:w-10 sm:h-10 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+      </svg>
+    </div>`;
+    btnClass = 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 focus:ring-emerald-500';
+  } else if (isError) {
+    title = t('errorTitle') || 'Error';
+    icon = `<div class="w-16 h-16 sm:w-20 sm:h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5">
+      <svg class="w-8 h-8 sm:w-10 sm:h-10 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </div>`;
+    btnClass = 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 focus:ring-red-500';
+  } else if (isLoading) {
+    title = t('processing') || 'Procesando...'; // Fallback
+    icon = `<div class="w-16 h-16 sm:w-20 sm:h-20 bg-blue-50 dark:bg-blue-900/10 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5">
+      <svg class="w-8 h-8 sm:w-10 sm:h-10 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    </div>`;
+    // No button for loading
+  } else {
+    // Info / Warning
+    title = 'Info';
+    icon = `<div class="w-16 h-16 sm:w-20 sm:h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-5">
+      <svg class="w-8 h-8 sm:w-10 sm:h-10 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>`;
+    btnClass = 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 focus:ring-blue-500';
+  }
+
+  const buttonHtml = isLoading ? '' : `
+    <button onclick="document.getElementById('toast-modal').remove()" 
+      class="w-full py-3 sm:py-3.5 px-6 rounded-xl sm:rounded-2xl text-white font-bold text-base sm:text-lg shadow-lg hover:shadow-xl transform transition-all active:scale-95 focus:outline-none focus:ring-4 focus:ring-opacity-50 ${btnClass}">
+      ENTENDIDO
+    </button>
+  `;
+
+  modal.innerHTML = `
+    <div class="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 text-center border border-gray-100 dark:border-gray-700 transform transition-all scale-100">
+      ${icon}
+      <h3 class="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white mb-2 tracking-tight">${title}</h3>
+      <p class="text-gray-500 dark:text-gray-300 ${isLoading ? 'mb-0' : 'mb-6 sm:mb-8'} text-base sm:text-lg leading-relaxed">${message}</p>
+      ${buttonHtml}
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Auto remove after 3 seconds ONLY if it's a success message (optional, but modals usually require user interaction or timeout)
+  // User asked for "toast" behavior, but "modal" design. Usually modals block. 
+  // If we want it to behave like a toast but look like a modal, we might want auto-dismiss.
+  // However, "Result Modal" in tour-details usually waits for click. 
+  // Let's keep it manual dismiss for now as it's "better quality".
+  if (isSuccess) {
+    setTimeout(() => {
+      const m = document.getElementById('toast-modal');
+      if (m) m.remove();
+    }, 2000);
+  }
 }
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
