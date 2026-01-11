@@ -1634,7 +1634,7 @@ function getGuideAssignmentCount(params) {
     const apiKey = params.apiKey;
     const storedKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
 
-    if (!apiKey || !apiKey !== storedKey) {
+    if (!apiKey || apiKey !== storedKey) {
       Logger.log('ERROR: Invalid API Key');
       return buildResponse({
         error: true,
