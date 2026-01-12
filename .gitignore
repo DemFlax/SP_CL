@@ -20,6 +20,14 @@ node_modules/
 .DS_Store
 Thumbs.db
 
+# Build output / misc artifacts
+dist/
+logs*.txt
+tatus
+users.json
+mntuser-dataoutputsmockup-mobile.html
+firestore.rules.backup
+
 # Secrets y Keys
 *.key
 *.pem
