@@ -8,7 +8,7 @@ function showLogin() {
   console.log('showLogin called');
   app.innerHTML = `
     <div class="login-container">
-      <h1>Calendario Tours Madrid</h1>
+      <h1>demCalendar</h1>
       <form id="loginForm">
         <input type="email" id="email" placeholder="Email" required>
         <input type="password" id="password" placeholder="Contraseña" required>
@@ -17,7 +17,7 @@ function showLogin() {
       <div id="error" class="error"></div>
     </div>
   `;
-  
+
   document.getElementById('loginForm').addEventListener('submit', (e) => {
     e.preventDefault();
     login(document.getElementById('email').value, document.getElementById('password').value);
@@ -54,7 +54,7 @@ function showManagerDashboard() {
       </main>
     </div>
   `;
-  
+
   document.getElementById('createGuideForm').addEventListener('submit', createGuide);
   loadGuides();
 }
@@ -104,7 +104,7 @@ async function createGuide(e) {
   e.preventDefault();
   const errorDiv = document.getElementById('guide-error');
   errorDiv.textContent = '';
-  
+
   const guideData = {
     nombre: document.getElementById('nombre').value,
     email: document.getElementById('email').value,
@@ -116,7 +116,7 @@ async function createGuide(e) {
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
-  
+
   try {
     await firebase.firestore().collection('guides').add(guideData);
     document.getElementById('createGuideForm').reset();
@@ -130,7 +130,7 @@ async function createGuide(e) {
 
 function loadGuides() {
   const listDiv = document.getElementById('guidesList');
-  
+
   firebase.firestore().collection('guides')
     .where('estado', '==', 'activo')
     .onSnapshot(snapshot => {
@@ -138,7 +138,7 @@ function loadGuides() {
         listDiv.innerHTML = '<p>No hay guías registrados</p>';
         return;
       }
-      
+
       listDiv.innerHTML = snapshot.docs.map(doc => {
         const guide = doc.data();
         return `
@@ -160,12 +160,12 @@ const checkFirebase = setInterval(() => {
     console.log('Firebase ready!');
     clearInterval(checkFirebase);
     auth = firebase.auth();
-    
+
     auth.onAuthStateChanged(async (user) => {
       console.log('auth state changed, user:', user);
       if (user) {
         // Temporal: rol por email
-        if (user.email === 'madrid@spainfoodsherpas.com') {
+        if (user.email === 'leadtoshopsl@gmail.com') {
           showManagerDashboard();
         } else {
           showGuideDashboard();

@@ -1,18 +1,17 @@
-const CACHE_NAME = 'sfs-calendar-v3';  // ← CAMBIAR DE v1 A v3
+﻿const CACHE_NAME = 'demcalendar-v5'; // Bump to refresh cached assets
 const OFFLINE_PAGE = '/login.html';
 
-// Archivos críticos para cache
+// Archivos crÃ­ticos para cache
 const CORE_ASSETS = [
   '/',
   '/login.html',
   '/manager.html',
   '/guide.html',
-  '/css/tailwind.min.css',
-  '/js/auth.js',
+  // Removed missing files: tailwind.min.css, auth.js
   '/js/firebase-config.js',
   '/assets/icon-192.png',
   '/assets/icon-512.png',
-  '/assets/logo-sfs.png',
+  '/assets/logo-demcalendar.png',
   '/manifest.json'
 ];
 
@@ -38,32 +37,47 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: estrategia Network-First para Firestore, Cache-First para assets
+// Fetch: Cache-First solo para assets same-origin
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  if (request.method !== 'GET') {
+    return;
+  }
   const url = new URL(request.url);
+  if (url.origin !== self.location.origin) {
+    return;
+  }
 
-  // Firestore: siempre network-first (datos actualizados)
-  if (url.hostname === 'firestore.googleapis.com') {
+  if (request.mode === 'navigate' || request.destination === 'document') {
     event.respondWith(
-      fetch(request).catch(() => {
-        return new Response(
-          JSON.stringify({ error: 'Sin conexión' }),
-          { headers: { 'Content-Type': 'application/json' } }
-        );
-      })
+      fetch(request)
+        .then((response) => {
+          if (!response || response.status !== 200) {
+            return response;
+          }
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache);
+          });
+          return response;
+        })
+        .catch(() => {
+          return caches.match(request).then((cached) => {
+            return cached || caches.match(OFFLINE_PAGE);
+          });
+        })
     );
     return;
   }
 
-  // Assets estáticos: cache-first
+  // Assets estaticos: cache-first
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
 
       return fetch(request).then((response) => {
-        // Solo cachear GET y respuestas válidas
-        if (request.method !== 'GET' || !response || response.status !== 200) {
+        // Solo cachear GET y respuestas validas
+        if (!response || response.status !== 200) {
           return response;
         }
 
@@ -79,7 +93,11 @@ self.addEventListener('fetch', (event) => {
         if (request.destination === 'document') {
           return caches.match(OFFLINE_PAGE);
         }
+        return Response.error();
       });
     })
   );
 });
+
+
+

@@ -3,17 +3,17 @@ import { getAuth, connectAuthEmulator } from 'https://www.gstatic.com/firebasejs
 import { getFirestore, connectFirestoreEmulator } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA2K1hWVovDGcVart7XFEbTqJuQRErPRTI",
-  authDomain: "calendar-app-tours.firebaseapp.com",
-  projectId: "calendar-app-tours",
-  storageBucket: "calendar-app-tours.firebasestorage.app",
-  messagingSenderId: "498221526899",
-  appId: "1:498221526899:web:1fa32c1d4b6cd6e37b5f06"
+  apiKey: "AIzaSyDy1txlYOzTAdiq4ohJjoUpO_vdUKLtYL8",
+  authDomain: "demcalendar-a9010.firebaseapp.com",
+  projectId: "demcalendar-a9010",
+  storageBucket: "demcalendar-a9010.firebasestorage.app",
+  messagingSenderId: "463581099746",
+  appId: "1:463581099746:web:1cc114443735ea140090bb"
 };
 
 export const appsScriptConfig = {
-  url: 'https://script.google.com/macros/s/AKfycby2fXR2n4kLnItxvg-cVXSus2zUrl54dbJvbs5Y820IKzWAssKp3ZD-EPZgafFnK3O87A/exec',
-  apiKey: 'sfs-calendar-2024-secure-key'
+  url: 'https://script.google.com/macros/s/AKfycbwfD3LhwCAhGhWtSlauYd-xVFioo8fAjIznCBw_PC1CtDRx1Z3Z5b4W2DK0_hAEtUup/exec',
+  apiKey: 'demcalendar-2026-key'
 };
 
 const app = initializeApp(firebaseConfig);

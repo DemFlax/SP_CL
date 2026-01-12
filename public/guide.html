@@ -4,13 +4,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Guía - Tours Madrid</title>
+  <title>Dashboard Guia - demCalendar</title>
 
   <!-- PWA Meta Tags -->
   <meta name="theme-color" content="#334155">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="SFS">
+  <meta name="apple-mobile-web-app-title" content="demCalendar">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
 
@@ -28,7 +28,7 @@
   <nav class="bg-slate-700 dark:bg-slate-800 text-white shadow-lg sticky top-0 z-50">
     <div class="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
       <div class="flex justify-between items-center">
-        <h1 id="page-title" class="text-lg sm:text-xl font-bold">Tours Calendar</h1>
+        <h1 id="page-title" class="text-lg sm:text-xl font-bold">demCalendar</h1>
         <div class="flex items-center gap-2">
           <a href="/my-invoices.html"
             class="flex items-center gap-1.5 bg-slate-600 hover:bg-slate-500 px-3 sm:px-4 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]">
@@ -155,7 +155,7 @@
 
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js')
+      navigator.serviceWorker.register('/sw.js')
         .then(() => {
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             window.location.reload();
@@ -167,6 +167,12 @@
   <script src="/js/pulltorefresh.js"></script>
   <!-- Theme Logic -->
   <script type="module" src="/js/theme-toggle.js"></script>
+
+  <footer class="demo-footer">
+    <p>DEMO publica: no contiene datos personales ni sensibles.</p>
+    <p>Contacto: <a href="mailto:leadtoshopsl@gmail.com">leadtoshopsl@gmail.com</a> | <a href="https://github.com/DemFlax" target="_blank" rel="noopener">github.com/DemFlax</a></p>
+  </footer>
 </body>
 
 </html>
+

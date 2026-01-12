@@ -1,11 +1,11 @@
 const admin = require('firebase-admin');
 
 admin.initializeApp({
-  projectId: 'calendar-app-tours'
+  projectId: 'demcalendar-a9010'
 });
 
 async function configureManager() {
-  const email = 'madrid@spainfoodsherpas.com';
+  const email = 'leadtoshopsl@gmail.com';
   
   try {
     // Verificar si existe

@@ -4,12 +4,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mis Facturas - Tours Madrid</title>
+  <title>Mis Facturas - demCalendar</title>
 
-  <meta name="theme-color" content="#0ea5e9">
+  <meta name="theme-color" content="#2f6f5f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="SFS">
+  <meta name="apple-mobile-web-app-title" content="demCalendar">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
 
@@ -243,7 +243,7 @@
   <script type="module" src="/js/guide-invoices.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js')
+      navigator.serviceWorker.register('/sw.js')
         .then(() => {
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             window.location.reload();
@@ -254,6 +254,13 @@
   <script src="/js/pulltorefresh.js"></script>
   <!-- Theme Logic -->
   <script type="module" src="/js/theme-toggle.js"></script>
+
+  <footer class="demo-footer">
+    <p>DEMO publica: no contiene datos personales ni sensibles.</p>
+    <p>Contacto: <a href="mailto:leadtoshopsl@gmail.com">leadtoshopsl@gmail.com</a> | <a href="https://github.com/DemFlax" target="_blank" rel="noopener">github.com/DemFlax</a></p>
+  </footer>
 </body>
 
 </html>
+
+

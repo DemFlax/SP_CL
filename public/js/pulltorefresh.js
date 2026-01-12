@@ -21,7 +21,7 @@
     const div = document.createElement('div');
     div.id = 'ptr-custom';
     div.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:0;display:flex;justify-content:center;align-items:flex-start;pointer-events:none;z-index:9999;opacity:0;transition:opacity 0.2s ease;';
-    div.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="3" style="margin-top:15px"><circle cx="12" cy="12" r="10" opacity="0.25"/><path d="M12 2 A10 10 0 0 1 22 12" style="animation:ptr-spin 0.8s linear infinite"/></svg>';
+    div.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2f6f5f" stroke-width="3" style="margin-top:15px"><circle cx="12" cy="12" r="10" opacity="0.25"/><path d="M12 2 A10 10 0 0 1 22 12" style="animation:ptr-spin 0.8s linear infinite"/></svg>';
     document.body.appendChild(div);
     return div;
   }

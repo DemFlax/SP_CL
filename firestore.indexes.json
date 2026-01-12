@@ -4,106 +4,218 @@
       "collectionGroup": "shifts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "fecha", "order": "ASCENDING" },
-        { "fieldPath": "estado", "order": "ASCENDING" }
+        {
+          "fieldPath": "fecha",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "shifts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "guiaId", "order": "ASCENDING" },
-        { "fieldPath": "fecha", "order": "ASCENDING" }
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "shifts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "estado", "order": "ASCENDING" },
-        { "fieldPath": "fecha", "order": "ASCENDING" },
-        { "fieldPath": "slot", "order": "ASCENDING" }
+        {
+          "fieldPath": "guiaId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "slot",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "vendors",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "estado", "order": "ASCENDING" },
-        { "fieldPath": "orden", "order": "ASCENDING" }
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "orden",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "vendor_costs",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "guideId", "order": "ASCENDING" },
-        { "fieldPath": "fecha", "order": "DESCENDING" }
+        {
+          "fieldPath": "guideId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "vendor_costs",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "fecha", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "guideId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vendor_costs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "fecha",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "guide_invoices",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "guideId", "order": "ASCENDING" },
-        { "fieldPath": "month", "order": "DESCENDING" }
+        {
+          "fieldPath": "guideId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "month",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "guide_invoices",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "guide_invoices",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "uploadDeadline", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "uploadDeadline",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "guide_invoices",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "month", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
+        {
+          "fieldPath": "month",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "guide_invoices",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "guideId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "guideId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "vendor_reports",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "vendorId", "order": "ASCENDING" },
-        { "fieldPath": "sentAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "vendorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sentAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "vendor_reports",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "month", "order": "ASCENDING" },
-        { "fieldPath": "generatedBy", "order": "ASCENDING" }
+        {
+          "fieldPath": "month",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "generatedBy",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

@@ -1,13 +1,27 @@
 /**
  * THEME TOGGLE MODULE
- * Standardized Dark Mode logic for Sherpas Calendar App
+ * Standardized Dark Mode logic for demCalendar
  * Behavior: Dark Mode by DEFAULT.
  */
 
-// 1. Apply theme immediately on load to prevent flash
+// 1. Normalize stored theme values and apply immediately to prevent flash.
+function normalizeStoredTheme() {
+    const stored = localStorage.getItem('darkMode');
+    if (stored === 'enabled') {
+        localStorage.setItem('darkMode', 'true');
+        return 'true';
+    }
+    if (stored === 'disabled') {
+        localStorage.setItem('darkMode', 'false');
+        return 'false';
+    }
+    return stored;
+}
+
 // Logic: If 'light' is explicitly stored, use light. Otherwise (null or 'dark'), force DARK.
 function initTheme() {
-    if (localStorage.getItem('darkMode') === 'false') {
+    const stored = normalizeStoredTheme();
+    if (stored === 'false') {
         document.documentElement.classList.remove('dark');
     } else {
         document.documentElement.classList.add('dark');
@@ -23,21 +37,11 @@ function updateIcons() {
 
     if (moonIcon && sunIcon) {
         if (isDark) {
-            moonIcon.classList.add('hidden'); // In dark mode, we show SUN (to switch to light) or MOON?
-            // Usually: Dark Mode Active -> Show SUN icon (to switch to light)
-            // But manager.html had: 
-            // - moon hidden in light mode (shows moon to go dark)
-            // - sun hidden in dark mode (shows sun to go light)
-
-            // Let's stick to standard practice:
-            // If Dark -> Show Sun (to toggle light)
-            // If Light -> Show Moon (to toggle dark)
-
-            sunIcon.classList.remove('hidden');
-            moonIcon.classList.add('hidden');
+            sunIcon.style.display = 'block';
+            moonIcon.style.display = 'none';
         } else {
-            sunIcon.classList.add('hidden');
-            moonIcon.classList.remove('hidden');
+            sunIcon.style.display = 'none';
+            moonIcon.style.display = 'block';
         }
     }
 }

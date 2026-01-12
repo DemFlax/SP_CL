@@ -1,11 +1,11 @@
 {
-  "name": "Sherpas_App",
-  "short_name": "SFS",
-  "description": "Sistema de gestión de turnos para guías turísticos",
+  "name": "demCalendar",
+  "short_name": "demCalendar",
+  "description": "Tour scheduling calendar demo",
   "start_url": "/login.html",
   "display": "standalone",
-  "background_color": "#1e293b",
-  "theme_color": "#0ea5e9",
+  "background_color": "#0f1512",
+  "theme_color": "#2f6f5f",
   "orientation": "portrait",
   "icons": [
     {
@@ -22,3 +22,4 @@
     }
   ]
 }
+

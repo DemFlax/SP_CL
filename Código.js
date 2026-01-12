@@ -1,4 +1,4 @@
-const CALENDAR_ID = 'c_61981c641dc3c970e63f1713ccc2daa49d8fe8962b6ed9f2669c4554496c7bdd@group.calendar.google.com';
+const CALENDAR_ID = '03e6e2bd93f1cd332d43af376e89ff738d0a0513874688f5eb22b1856ffacee4@group.calendar.google.com';
 // Last updated: 2025-12-09T10:58:00
 
 const SLOT_TIMES = {
@@ -8,9 +8,9 @@ const SLOT_TIMES = {
   'T3': '19:15'
 };
 
-const VENDORS_SHEET_ID = '1Qre_IpEMsvjfzxLpOXsAPbHppEOxTIpi5MhofoUzFks';
-const ROOT_DRIVE_FOLDER_ID = '1CnDf9MdCqr9bzeyIfjOvfq3bAWckVZ6Y';
-const INVOICES_FOLDER_ID = '1NKpwoOvBPlXKI8dQCI9GlN9hYUrTMRP3';
+const VENDORS_SHEET_ID = '1YiZiq6P68O1V9ZHb2hRCUlNz054eD1usY4N3lzwQfHU';
+const ROOT_DRIVE_FOLDER_ID = '19fcZE8V-y2oCQXXCjfPrChTcQclT6Qmj';
+const INVOICES_FOLDER_ID = '1mV_HxM_TLhSlLhYxDDUxDh6fIubozk5B';
 
 function doGet(e) {
   Logger.log('=== doGet triggered ===');

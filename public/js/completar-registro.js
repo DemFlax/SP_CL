@@ -1,4 +1,4 @@
-import { auth, db } from './firebase-config.js';
+import firebaseConfig, { auth, db } from './firebase-config.js';
 import { 
   isSignInWithEmailLink, 
   signInWithEmailLink,
@@ -57,7 +57,8 @@ async function completarRegistro() {
     window.localStorage.removeItem('emailForSignIn');
 
     // Asignar custom claims (se hace en cliente porque usuario ya existe)
-    await fetch('https://us-central1-calendar-app-tours.cloudfunctions.net/assignGuideClaims', {
+    const functionsBase = `https://us-central1-${firebaseConfig.projectId}.cloudfunctions.net`;
+    await fetch(`${functionsBase}/assignGuideClaims`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 

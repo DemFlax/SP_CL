@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Facturas - Manager</title>
+    <title>Facturas - demCalendar</title>
 
-    <meta name="theme-color" content="#0ea5e9">
+    <meta name="theme-color" content="#2f6f5f">
     <link rel="manifest" href="/manifest.json">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -30,15 +30,15 @@
                     <button id="lang-toggle"
                         class="p-2 sm:p-2.5 bg-sky-700/50 hover:bg-sky-800/50 rounded-lg text-sm font-bold">EN</button>
 
-                    <button id="dark-mode-toggle"
+                    <button id="theme-toggle"
                         class="p-2 sm:p-2.5 bg-sky-700/50 hover:bg-sky-800/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 rounded-lg transition-colors">
-                        <svg id="theme-icon-moon" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor"
+                        <svg id="theme-icon-moon" class="w-5 h-5 hidden" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z">
                             </path>
                         </svg>
-                        <svg id="theme-icon-sun" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor"
+                        <svg id="theme-icon-sun" class="w-5 h-5 hidden" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
@@ -375,6 +375,13 @@
     <script type="module" src="/js/manager-invoices.js?v=3"></script>
     <!-- Theme Logic -->
     <script type="module" src="/js/theme-toggle.js"></script>
+
+  <footer class="demo-footer">
+    <p>DEMO publica: no contiene datos personales ni sensibles.</p>
+    <p>Contacto: <a href="mailto:leadtoshopsl@gmail.com">leadtoshopsl@gmail.com</a> | <a href="https://github.com/DemFlax" target="_blank" rel="noopener">github.com/DemFlax</a></p>
+  </footer>
 </body>
 
 </html>
+
+

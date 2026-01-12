@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "calendar-app-tours"
-  }
+    "default": "demcalendar-a9010",
+    "demCalendarApp": "demcalendar-a9010"
+  },
+  "targets": {},
+  "etags": {}
 }

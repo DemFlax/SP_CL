@@ -38,11 +38,11 @@ const MAKE_WEBHOOK_URL =
   "https://hook.eu1.make.com/5rnftpqpqymx3o5i3g99c4ql4h6w3vv1";
 
 const MANAGER_EMAIL =
-  process.env.MANAGER_EMAIL || "madrid@spainfoodsherpas.com";
-const FROM_EMAIL = "madrid@spainfoodsherpas.com";
-const FROM_NAME = "Spain Food Sherpas";
+  process.env.MANAGER_EMAIL || "leadtoshopsl@gmail.com";
+const FROM_EMAIL = "leadtoshopsl@gmail.com";
+const FROM_NAME = "demCalendar";
 const APP_URL =
-  process.env.APP_URL || "https://calendar-app-tours.web.app";
+  process.env.APP_URL || "https://demcalendar-a9010.web.app";
 
 // Horarios fijos (para Bookeo)
 const SLOT_TIMES = {

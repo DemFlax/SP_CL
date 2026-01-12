@@ -22,8 +22,8 @@ var SFS_GUIDES_CACHE = null;
 const SFS_EMAIL_BEFORE_TARGET_HOURS = 18; // 18 horas antes
 const SFS_EMAIL_BEFORE_WINDOW_HOURS = 2;  // margen 2h (entre 16–18h antes)
 
-const SFS_EMAIL_AFTER_TARGET_HOURS  = 12; // 12 horas después
-const SFS_EMAIL_AFTER_WINDOW_HOURS  = 2;  // margen 2h (entre 12–14h después)
+const SFS_EMAIL_AFTER_TARGET_HOURS = 12; // 12 horas después
+const SFS_EMAIL_AFTER_WINDOW_HOURS = 2;  // margen 2h (entre 12–14h después)
 
 // Dominios que NUNCA se consideran guests
 const SFS_EMAIL_BLOCKED_DOMAINS = [
@@ -31,10 +31,10 @@ const SFS_EMAIL_BLOCKED_DOMAINS = [
 ];
 
 // Enlace de review Madrid (Tripadvisor)
-const SFS_DEFAULT_REVIEW_LINK = 'https://www.tripadvisor.com/UserReviewEdit-g187514-d28577599-Spain_Food_Sherpas_Madrid-Madrid.html';
+const SFS_DEFAULT_REVIEW_LINK = 'https://www.google.com/maps?q=Plaza+Mayor+Madrid';
 
 // Enlace de mapa del meeting point (Madrid – Calle Arrieta, 2)
-const SFS_MEETING_POINT_LINK = 'https://maps.app.goo.gl/L6f1wtZA23oKZp459';
+const SFS_MEETING_POINT_LINK = 'https://www.google.com/maps?q=Plaza+Mayor+Madrid';
 
 
 // =========================
@@ -42,12 +42,12 @@ const SFS_MEETING_POINT_LINK = 'https://maps.app.goo.gl/L6f1wtZA23oKZp459';
 // =========================
 
 // SUBJECT + BODY 18h ANTES (texto plano)
-const SFS_EMAIL_BEFORE_SUBJECT = 'Tomorrow\'s food tour in Madrid – Spain Food Sherpas';
+const SFS_EMAIL_BEFORE_SUBJECT = 'Tomorrow\'s tour in Madrid - demCalendar';
 
 const SFS_EMAIL_BEFORE_BODY = `
 Hi there,
 
-This is {{GUIDE_NAME}} from Spain Food Sherpas ({{CITY}}). I’ll be your guide tomorrow for your "{{TOUR_NAME}}" experience at {{TOUR_TIME}}.
+This is {{GUIDE_NAME}} from demCalendar ({{CITY}}). I’ll be your guide tomorrow for your "{{TOUR_NAME}}" experience at {{TOUR_TIME}}.
 
 Tour start time: {{TOUR_TIME}}
 Please try to arrive about 10 minutes early so we can start right on time.
@@ -63,7 +63,7 @@ If you haven’t already, could you please let me know if you have any allergies
 Looking forward to meeting you,
 
 {{GUIDE_NAME}}
-Spain Food Sherpas, {{CITY}}
+demCalendar, {{CITY}}
 `.trim();
 
 // SUBJECT + BODY 12h DESPUÉS (texto plano)
@@ -83,7 +83,7 @@ You can leave a short review here:
 
 Thanks!
 {{GUIDE_NAME}}
-Spain Food Sherpas, {{CITY}}
+demCalendar, {{CITY}}
 `.trim();
 
 
@@ -94,7 +94,7 @@ Spain Food Sherpas, {{CITY}}
 const SFS_EMAIL_BEFORE_BODY_HTML = `
 <p>Hi there,</p>
 
-<p>This is {{GUIDE_NAME}} from Spain Food Sherpas ({{CITY}}). I’ll be your guide tomorrow for your “{{TOUR_NAME}}” experience at {{TOUR_TIME}}.</p>
+<p>This is {{GUIDE_NAME}} from demCalendar ({{CITY}}). I’ll be your guide tomorrow for your “{{TOUR_NAME}}” experience at {{TOUR_TIME}}.</p>
 
 <p><strong>Tour start time:</strong> {{TOUR_TIME}}<br>
 Please try to arrive about 10 minutes early so we can start right on time.</p>
@@ -110,7 +110,7 @@ You can also find the meeting point here:
 <p>Looking forward to meeting you,</p>
 
 <p>{{GUIDE_NAME}}<br>
-Spain Food Sherpas, {{CITY}}</p>
+demCalendar, {{CITY}}</p>
 `.trim();
 
 const SFS_EMAIL_AFTER_BODY_HTML = `
@@ -123,13 +123,13 @@ It was great to meet you!</p>
 You can't imagine how valuable your words are.</p>
 
 <p>You can leave a short review here:<br>
-<a href="{{REVIEW_LINK}}" target="_blank">Leave your review on Tripadvisor</a></p>
+<a href="{{REVIEW_LINK}}" target="_blank">Leave your review on Google Maps</a></p>
 
 <p>If you can mention my name ({{GUIDE_NAME}}) in the review, that would be really helpful.</p>
 
 <p>Thanks!<br>
 {{GUIDE_NAME}}<br>
-Spain Food Sherpas, {{CITY}}</p>
+demCalendar, {{CITY}}</p>
 `.trim();
 
 
@@ -168,7 +168,7 @@ function processAutomaticTourEmails() {
     Logger.log('Page events count: ' + events.length);
     totalEvents += events.length;
 
-    events.forEach(function(event) {
+    events.forEach(function (event) {
       try {
         sfsProcessSingleEventForEmails_(event, now);
       } catch (err) {
@@ -201,7 +201,7 @@ function sfsProcessSingleEventForEmails_(event, now) {
   const startMs = start.getTime();
 
   const diffBeforeHours = (startMs - nowMs) / (1000 * 60 * 60);
-  const diffAfterHours  = (nowMs - startMs) / (1000 * 60 * 60);
+  const diffAfterHours = (nowMs - startMs) / (1000 * 60 * 60);
 
   Logger.log('diffBeforeHours: ' + diffBeforeHours.toFixed(3));
   Logger.log('diffAfterHours:  ' + diffAfterHours.toFixed(3));
@@ -217,8 +217,8 @@ function sfsProcessSingleEventForEmails_(event, now) {
   // 2) Guests desde descripción
   const description = event.description || '';
   const attendeeEmails = (event.attendees || [])
-    .map(function(a) { return a.email || ''; })
-    .filter(function(e) { return !!e; });
+    .map(function (a) { return a.email || ''; })
+    .filter(function (e) { return !!e; });
 
   Logger.log('Attendee emails: ' + JSON.stringify(attendeeEmails));
 
@@ -233,7 +233,7 @@ function sfsProcessSingleEventForEmails_(event, now) {
   // 3) Flags en extendedProperties.private
   const privateProps = (event.extendedProperties && event.extendedProperties.private) || {};
   var beforeSent = privateProps.sfsEmail12hBeforeSent === 'true';
-  var afterSent  = privateProps.sfsEmail12hAfterSent  === 'true';
+  var afterSent = privateProps.sfsEmail12hAfterSent === 'true';
 
   Logger.log('Flags -> beforeSent=' + beforeSent + ', afterSent=' + afterSent);
 
@@ -241,8 +241,8 @@ function sfsProcessSingleEventForEmails_(event, now) {
 
   // 4) Email 18h ANTES
   if (!beforeSent &&
-      diffBeforeHours <= SFS_EMAIL_BEFORE_TARGET_HOURS &&
-      diffBeforeHours > (SFS_EMAIL_BEFORE_TARGET_HOURS - SFS_EMAIL_BEFORE_WINDOW_HOURS)) {
+    diffBeforeHours <= SFS_EMAIL_BEFORE_TARGET_HOURS &&
+    diffBeforeHours > (SFS_EMAIL_BEFORE_TARGET_HOURS - SFS_EMAIL_BEFORE_WINDOW_HOURS)) {
 
     Logger.log('Condition BEFORE met. Sending BEFORE email...');
     sfsSendEmailBeforeTour_(event, guide, guestEmails);
@@ -255,8 +255,8 @@ function sfsProcessSingleEventForEmails_(event, now) {
 
   // 5) Email 12h DESPUÉS
   if (!afterSent &&
-      diffAfterHours >= SFS_EMAIL_AFTER_TARGET_HOURS &&
-      diffAfterHours < (SFS_EMAIL_AFTER_TARGET_HOURS + SFS_EMAIL_AFTER_WINDOW_HOURS)) {
+    diffAfterHours >= SFS_EMAIL_AFTER_TARGET_HOURS &&
+    diffAfterHours < (SFS_EMAIL_AFTER_TARGET_HOURS + SFS_EMAIL_AFTER_WINDOW_HOURS)) {
 
     Logger.log('Condition AFTER met. Sending AFTER email...');
     sfsSendEmailAfterTour_(event, guide, guestEmails);
@@ -304,8 +304,8 @@ function sfsLoadGuidesCache_() {
       if (!row || !row[0]) continue;
 
       const email = String(row[0]).trim().toLowerCase();
-      const name  = row[1] ? String(row[1]).trim() : '';
-      const city  = row[2] ? String(row[2]).trim() : '';
+      const name = row[1] ? String(row[1]).trim() : '';
+      const city = row[2] ? String(row[2]).trim() : '';
       const phone = row[3] ? String(row[3]).trim() : '';
 
       if (!email) continue;
@@ -339,11 +339,11 @@ function sfsDetectGuideFromEvent_(event) {
   const attendees = event.attendees || [];
   if (attendees.length === 0) return null;
 
-  const guides = attendees.filter(function(att) {
+  const guides = attendees.filter(function (att) {
     if (!att.email) return false;
     const emailLower = att.email.toLowerCase();
 
-    const blocked = SFS_EMAIL_BLOCKED_DOMAINS.some(function(domain) {
+    const blocked = SFS_EMAIL_BLOCKED_DOMAINS.some(function (domain) {
       return emailLower.indexOf(domain) !== -1;
     });
     return !blocked;
@@ -362,13 +362,13 @@ function sfsDetectGuideFromEvent_(event) {
   let phone;
 
   if (profile) {
-    name  = profile.name || guideAtt.displayName || (email.split('@')[0]);
-    city  = profile.city || SFS_CITY_DEFAULT;
+    name = profile.name || guideAtt.displayName || (email.split('@')[0]);
+    city = profile.city || SFS_CITY_DEFAULT;
     phone = profile.phone || '';
   } else {
     Logger.log('GUIDE PROFILE NOT FOUND in sheet for email: ' + email);
-    name  = guideAtt.displayName || (email.split('@')[0]);
-    city  = SFS_CITY_DEFAULT;
+    name = guideAtt.displayName || (email.split('@')[0]);
+    city = SFS_CITY_DEFAULT;
     phone = '';
   }
 
@@ -391,18 +391,18 @@ function sfsExtractGuestEmailsFromDescription_(description, guideEmail, attendee
 
   const guideEmailLower = guideEmail ? guideEmail.toLowerCase() : '';
   const attendeeSet = {};
-  (attendeeEmails || []).forEach(function(e) {
+  (attendeeEmails || []).forEach(function (e) {
     attendeeSet[e.toLowerCase()] = true;
   });
 
   const blockSet = {};
-  SFS_EMAIL_BLOCKED_DOMAINS.forEach(function(domain) {
+  SFS_EMAIL_BLOCKED_DOMAINS.forEach(function (domain) {
     blockSet[domain.toLowerCase()] = true;
   });
 
   const resultSet = {};
 
-  matches.forEach(function(raw) {
+  matches.forEach(function (raw) {
     const email = raw.trim().toLowerCase();
     if (!email) return;
 
@@ -410,7 +410,7 @@ function sfsExtractGuestEmailsFromDescription_(description, guideEmail, attendee
     if (attendeeSet[email]) return;
 
     var blocked = false;
-    Object.keys(blockSet).forEach(function(domain) {
+    Object.keys(blockSet).forEach(function (domain) {
       if (!blocked && email.indexOf(domain) !== -1) {
         blocked = true;
       }
@@ -450,9 +450,9 @@ function sfsSendEmailBeforeTour_(event, guide, guestEmails) {
   const htmlBody = sfsFillTemplate_(SFS_EMAIL_BEFORE_BODY_HTML, data);
 
   Logger.log('Sending BEFORE email to: ' + JSON.stringify(guestEmails));
-  guestEmails.forEach(function(email) {
+  guestEmails.forEach(function (email) {
     GmailApp.sendEmail(email, SFS_EMAIL_BEFORE_SUBJECT, textBody, {
-      name: 'Spain Food Sherpas – ' + guide.name,
+      name: 'demCalendar - ' + guide.name,
       replyTo: guide.email,
       htmlBody: htmlBody,
       bcc: guide.email // copia oculta al guía SOLO en el email de ANTES
@@ -480,9 +480,9 @@ function sfsSendEmailAfterTour_(event, guide, guestEmails) {
   const htmlBody = sfsFillTemplate_(SFS_EMAIL_AFTER_BODY_HTML, data);
 
   Logger.log('Sending AFTER email to: ' + JSON.stringify(guestEmails));
-  guestEmails.forEach(function(email) {
+  guestEmails.forEach(function (email) {
     GmailApp.sendEmail(email, SFS_EMAIL_AFTER_SUBJECT, textBody, {
-      name: 'Spain Food Sherpas – ' + guide.name,
+      name: 'demCalendar - ' + guide.name,
       replyTo: guide.email,
       htmlBody: htmlBody
       // sin BCC aquí: solo en el email de ANTES
@@ -494,7 +494,7 @@ function sfsSendEmailAfterTour_(event, guide, guestEmails) {
 // ============ UTILIDADES ============
 
 function sfsFillTemplate_(template, data) {
-  return template.replace(/{{(\w+)}}/g, function(match, key) {
+  return template.replace(/{{(\w+)}}/g, function (match, key) {
     if (data.hasOwnProperty(key)) {
       return data[key];
     }

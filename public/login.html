@@ -1,55 +1,53 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Spain Food Sherpas</title>
-  
+  <title>Login - demCalendar</title>
+
   <!-- PWA Meta Tags -->
-  <meta name="theme-color" content="#0ea5e9">
+  <meta name="theme-color" content="#2f6f5f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="SFS">
+  <meta name="apple-mobile-web-app-title" content="demCalendar">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
-  
+
+  <link rel="stylesheet" href="/css/styles.css">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900 flex items-center justify-center min-h-screen px-4">
+
+<body class="bg-slate-900 auth-page min-h-screen flex flex-col items-center justify-center px-4 py-6 gap-6">
   <div class="bg-slate-800 p-8 sm:p-10 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700">
     <!-- Logo -->
     <div class="flex justify-center mb-8">
-      <img src="/assets/logo-sfs.png" alt="Spain Food Sherpas" class="w-32 h-32 sm:w-40 sm:h-40">
+      <div class="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden ring-2 ring-black/30 shadow-lg bg-black">
+        <img src="/assets/logo-demcalendar.png" alt="demCalendar" class="auth-avatar-img">
+      </div>
     </div>
-    
+
     <!-- Título -->
     <div class="text-center mb-8">
-      <h1 class="text-2xl sm:text-3xl font-bold text-white mb-2">Calendario Tours</h1>
-      <p class="text-slate-400 text-sm">Spain Food Sherpas · Madrid</p>
+      <h1 class="text-2xl sm:text-3xl font-bold text-white mb-2">demCalendar</h1>
+      <h2 class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Calendario Agencia de Tours</h2>
+      <p class="text-slate-400 text-sm mt-2">Made by Dani Moreno</p>
     </div>
-    
+
     <!-- Form -->
     <form id="login-form" class="space-y-6">
       <div>
         <label class="block text-sm font-semibold text-slate-300 mb-2">Email *</label>
-        <input
-          type="email"
-          id="email"
-          required
+        <input type="email" id="email" required
           class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-500 transition placeholder-slate-400"
-          placeholder="tu@email.com"
-        >
+          placeholder="tu@email.com">
       </div>
-      
+
       <div>
         <label class="block text-sm font-semibold text-slate-300 mb-2">Contraseña *</label>
-        <input
-          type="password"
-          id="password"
-          required
+        <input type="password" id="password" required
           class="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-500 transition placeholder-slate-400"
-          placeholder="••••••••"
-        >
+          placeholder="••••••••">
       </div>
 
       <div class="flex justify-end">
@@ -57,24 +55,18 @@
           ¿Olvidaste tu contraseña?
         </a>
       </div>
-      
-      <button
-        type="submit"
-        class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-3 rounded-lg transition duration-200 shadow-lg"
-      >
+
+      <button type="submit"
+        class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-3 rounded-lg transition duration-200 shadow-lg">
         Iniciar Sesión
       </button>
     </form>
-    
+
     <div id="error" class="hidden mt-6 p-4 bg-red-900/50 border-l-4 border-red-500 text-red-200 rounded text-sm"></div>
+
     
-    <!-- Footer -->
-    <div class="mt-8 text-center text-xs text-slate-500">
-      <p>© 2013-2025 Spain Food Sherpas</p>
-      <p class="mt-1">Authentic Taste Experience</p>
-    </div>
   </div>
-  
+
   <!-- PWA Service Worker Registration -->
   <script>
     if ('serviceWorker' in navigator) {
@@ -85,27 +77,27 @@
       });
     }
   </script>
-  
+
   <script type="module">
     import { auth } from './js/firebase-config.js';
     import { signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-    
+
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      
+
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
       const errorDiv = document.getElementById('error');
       const submitBtn = e.target.querySelector('button[type="submit"]');
-      
+
       submitBtn.disabled = true;
       submitBtn.textContent = 'Iniciando...';
       errorDiv.classList.add('hidden');
-      
+
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const token = await userCredential.user.getIdTokenResult();
-        
+
         if (token.claims.role === 'manager') {
           window.location.href = '/manager.html';
         } else if (token.claims.role === 'guide') {
@@ -115,9 +107,9 @@
         }
       } catch (error) {
         console.error('Login error:', error);
-        
+
         let errorMessage = 'Error al iniciar sesión';
-        
+
         if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
           errorMessage = 'Email o contraseña incorrectos';
         } else if (error.code === 'auth/user-not-found') {
@@ -127,7 +119,7 @@
         } else if (error.message) {
           errorMessage = error.message;
         }
-        
+
         errorDiv.textContent = errorMessage;
         errorDiv.classList.remove('hidden');
         submitBtn.disabled = false;
@@ -135,18 +127,17 @@
       }
     });
   </script>
-  
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js')
-        .then(() => {
-          navigator.serviceWorker.addEventListener('controllerchange', () => {
-            window.location.reload();
-          });
-        });
-    }
-  </script>
+
+
   <!-- Pull to Refresh iOS PWA -->
   <script src="/js/pulltorefresh.js"></script>
+
+  <footer class="demo-footer">
+    <p>DEMO publica: no contiene datos personales ni sensibles.</p>
+    <p>Contacto: <a href="mailto:leadtoshopsl@gmail.com">leadtoshopsl@gmail.com</a> | <a href="https://github.com/DemFlax" target="_blank" rel="noopener">github.com/DemFlax</a></p>
+  </footer>
 </body>
+
 </html>
+
+

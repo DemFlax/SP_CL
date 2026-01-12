@@ -27,11 +27,11 @@ const appsScriptUrl = defineSecret('APPS_SCRIPT_URL');
 const appsScriptKey = defineSecret('APPS_SCRIPT_API_KEY');
 
 // Config
-const MANAGER_EMAIL = process.env.MANAGER_EMAIL || 'madrid@spainfoodsherpas.com';
-const ACCOUNTING_EMAIL = process.env.ACCOUNTING_EMAIL || 'contabilidad@spainfoodsherpas.com';
-const FROM_EMAIL = 'madrid@spainfoodsherpas.com';
-const FROM_NAME = 'Spain Food Sherpas';
-const APP_URL = process.env.APP_URL || 'https://calendar-app-tours.web.app';
+const MANAGER_EMAIL = process.env.MANAGER_EMAIL || 'leadtoshopsl@gmail.com';
+const ACCOUNTING_EMAIL = process.env.ACCOUNTING_EMAIL || 'leadtoshopsl@gmail.com';
+const FROM_EMAIL = 'leadtoshopsl@gmail.com';
+const FROM_NAME = 'demCalendar';
+const APP_URL = process.env.APP_URL || 'https://demcalendar-a9010.web.app';
 
 // =========================================
 // HELPER: Calculate Salary (SIN IVA)
@@ -177,13 +177,13 @@ function getEmailTemplate(content) {
     <body>
       <div class="container">
         <div class="header">
-          <h1>Spain Food Sherpas</h1>
+          <h1>demCalendar</h1>
         </div>
         <div class="content">
           ${content}
         </div>
         <div class="footer">
-          <p>Spain Food Sherpas | madrid@spainfoodsherpas.com</p>
+          <p>demCalendar | Made by Dani Moreno</p>
         </div>
       </div>
     </body>

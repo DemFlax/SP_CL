@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gestión Guías - Manager</title>
+  <title>Gestion Guias - demCalendar</title>
   <link rel="stylesheet" href="/css/styles.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -22,15 +22,18 @@
           <p class="text-sky-100 dark:text-gray-400 text-xs sm:text-sm">Manager Dashboard</p>
         </div>
         <div class="flex items-center gap-2 sm:gap-3">
+          <button id="lang-toggle"
+            class="p-2 sm:p-2.5 bg-sky-700/50 hover:bg-sky-800/50 rounded-lg text-sm font-bold">EN</button>
+
           <button id="theme-toggle"
             class="p-2 sm:p-2.5 bg-sky-700/50 hover:bg-sky-800/50 dark:bg-gray-700/50 dark:hover:bg-gray-600/50 rounded-lg transition-colors">
-            <svg id="theme-icon-moon" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor"
-              viewBox="0 0 24 24">
+            <svg id="theme-icon-moon" class="w-5 h-5 hidden" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
             </svg>
-            <svg id="theme-icon-sun" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor"
-              viewBox="0 0 24 24">
+            <svg id="theme-icon-sun" class="w-5 h-5 hidden" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
               </path>
@@ -49,7 +52,8 @@
       </div>
 
       <div class="hidden md:flex mt-6 gap-2 flex-wrap">
-        <a href="/manager.html" class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
+        <a href="/manager.html"
+          class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
@@ -65,8 +69,7 @@
           </svg>
           <span>Asignaciones</span>
         </a>
-        <a href="/manager-guides.html"
-          class="flex items-center gap-2 px-4 py-2.5 bg-white/20 rounded-lg font-semibold">
+        <a href="/manager-guides.html" class="flex items-center gap-2 px-4 py-2.5 bg-white/20 rounded-lg font-semibold">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
@@ -107,7 +110,8 @@
         </button>
       </div>
       <div class="p-4 space-y-2">
-        <a href="/manager.html" class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg text-white font-medium">
+        <a href="/manager.html"
+          class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg text-white font-medium">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
@@ -252,7 +256,7 @@
   <script type="module" src="/js/manager-guides.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service-worker.js')
+      navigator.serviceWorker.register('/sw.js')
         .then(() => {
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             window.location.reload();
@@ -262,8 +266,15 @@
   </script>
   <!-- Pull to Refresh iOS PWA -->
   <script src="/js/pulltorefresh.js"></script>
+  <script src="/js/lang-toggle.js"></script>
   <!-- Theme Logic -->
   <script type="module" src="/js/theme-toggle.js"></script>
+
+  <footer class="demo-footer">
+    <p>DEMO publica: no contiene datos personales ni sensibles.</p>
+    <p>Contacto: <a href="mailto:leadtoshopsl@gmail.com">leadtoshopsl@gmail.com</a> | <a href="https://github.com/DemFlax" target="_blank" rel="noopener">github.com/DemFlax</a></p>
+  </footer>
 </body>
 
 </html>
+

@@ -26,10 +26,10 @@ const brevoKey = vendorCosts.brevoKey;
 // =========================================
 // VARIABLES DE ENTORNO (.env)
 // =========================================
-const APP_URL = process.env.APP_URL || 'https://calendar-app-tours.web.app';
-const MANAGER_EMAIL = process.env.MANAGER_EMAIL || 'madrid@spainfoodsherpas.com';
-const FROM_EMAIL = 'madrid@spainfoodsherpas.com';
-const FROM_NAME = 'Spain Food Sherpas';
+const APP_URL = process.env.APP_URL || 'https://demcalendar-a9010.web.app';
+const MANAGER_EMAIL = process.env.MANAGER_EMAIL || 'leadtoshopsl@gmail.com';
+const FROM_EMAIL = 'leadtoshopsl@gmail.com';
+const FROM_NAME = 'demCalendar';
 const ZAPIER_WEBHOOK_URL = process.env.ZAPIER_WEBHOOK_URL;
 
 const SLOT_TIMES = {
@@ -159,10 +159,10 @@ exports.onCreateGuide = onDocumentCreated({
 
     await vendorCosts.sendEmail({
       to: guide.email,
-      subject: 'Invitación - Calendario Tours Spain Food Sherpas',
+      subject: 'Invitacion - demCalendar',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Bienvenido a Spain Food Sherpas</h2>
+          <h2 style="color: #333;">Bienvenido a demCalendar</h2>
           <p>Hola ${guide.nombre || ''},</p>
           <p>Has sido invitado a unirte al equipo de guías turísticos.</p>
           <p>Para completar tu registro, establece tu contraseña haciendo clic en el botón:</p>
@@ -182,7 +182,7 @@ exports.onCreateGuide = onDocumentCreated({
           </div>
           
           <hr style="border: 1px solid #eee; margin: 20px 0;">
-          <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
+          <p style="color: #999; font-size: 12px;">demCalendar - Made by Dani Moreno</p>
         </div>
       `
     });
@@ -308,12 +308,12 @@ exports.onUpdateGuide = onDocumentUpdated({
 
       await vendorCosts.sendEmail({
         to: after.email,
-        subject: 'Reactivación - Calendario Tours Spain Food Sherpas',
+        subject: 'Reactivacion - demCalendar',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #333;">Cuenta Reactivada</h2>
             <p>Hola ${after.nombre || ''},</p>
-            <p>Tu cuenta ha sido reactivada en Spain Food Sherpas.</p>
+            <p>Tu cuenta ha sido reactivada en demCalendar.</p>
             <p>Para establecer tu nueva contraseña, haz clic en el botón:</p>
             <div style="margin: 20px 0;">
               <a href="${directLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
@@ -331,7 +331,7 @@ exports.onUpdateGuide = onDocumentUpdated({
             </div>
             
             <hr style="border: 1px solid #eee; margin: 20px 0;">
-            <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
+            <p style="color: #999; font-size: 12px;">demCalendar - Made by Dani Moreno</p>
           </div>
         `
       });
@@ -621,7 +621,7 @@ exports.resendInvitation = onCall({
 
     await vendorCosts.sendEmail({
       to: email,
-      subject: 'Nueva invitación - Calendario Tours Spain Food Sherpas',
+      subject: 'Nueva invitacion - demCalendar',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #333;">Nueva invitación</h2>
@@ -643,7 +643,7 @@ exports.resendInvitation = onCall({
           </div>
           
           <hr style="border: 1px solid #eee; margin: 20px 0;">
-          <p style="color: #999; font-size: 12px;">Spain Food Sherpas - Madrid</p>
+          <p style="color: #999; font-size: 12px;">demCalendar - Made by Dani Moreno</p>
         </div>
       `
     });
