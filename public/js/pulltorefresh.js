@@ -2,13 +2,14 @@
 // PULL TO REFRESH - iOS PWA v2.0 FIXED
 // Custom implementation sin libreria bugueada
 // =========================================
-(function () {
+(function() {
   'use strict';
-
-  const isIOSStandalone = ('standalone' in window.navigator) &&
-    (window.navigator.standalone === true);
-
+  
+  const isIOSStandalone = ('standalone' in window.navigator) && 
+                          (window.navigator.standalone === true);
+  
   if (!isIOSStandalone) {
+    console.log('[PTR] Disabled - not iOS standalone');
     return;
   }
 
@@ -25,7 +26,7 @@
     return div;
   }
 
-  window.addEventListener('load', function () {
+  window.addEventListener('load', function() {
     ptrElement = createPTR();
 
     document.addEventListener('touchstart', (e) => {
@@ -36,7 +37,7 @@
 
     document.addEventListener('touchmove', (e) => {
       if (window.scrollY !== 0 || startY === 0) return;
-
+      
       const currentY = e.touches[0].clientY;
       const distance = currentY - startY;
 

@@ -12,9 +12,8 @@ import {
   serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js';
 
-const functions = getFunctions(undefined, 'us-central1');
+
 
 let currentUser = null;
 let guidesUnsubscribe = null;
@@ -31,7 +30,6 @@ onAuthStateChanged(auth, (user) => {
     currentUser = user;
     loadGuides();
     initFilters();
-    checkUnassignedTours(); // Check for tours without guides
   } else {
     window.location.href = '/login.html';
   }
@@ -573,37 +571,6 @@ function showToast(message, type = 'info') {
       const m = document.getElementById('toast-modal');
       if (m) m.remove();
     }, 2000);
-  }
-}
-
-// =========================================
-// CHECK UNASSIGNED TOURS (Banner Logic)
-// =========================================
-async function checkUnassignedTours() {
-  const banner = document.getElementById('unassigned-banner');
-  const countSpan = document.getElementById('unassigned-count');
-
-  if (!banner || !countSpan) return;
-
-  const today = new Date().toISOString().split('T')[0];
-  const endDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-  try {
-    const getUnassigned = httpsCallable(functions, 'proxyGetUnassignedTours');
-    const result = await getUnassigned({ startDate: today, endDate });
-
-    const count = result.data.tours?.length || 0;
-
-    if (count > 0) {
-      banner.classList.remove('hidden');
-      countSpan.textContent = count;
-    } else {
-      banner.classList.add('hidden');
-    }
-  } catch (error) {
-    console.error('Error checking unassigned tours:', error);
-    // Silently fail - don't show banner if there's an error
-    banner.classList.add('hidden');
   }
 }
 

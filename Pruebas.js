@@ -22,17 +22,3 @@ function getRootFolderId() {
     Logger.log('Carpeta no existe aún');
   }
 }
-function getApiKeyFingerprint() {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('API_KEY') || '';
-  const digest = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    apiKey,
-    Utilities.Charset.UTF_8
-  );
-  const hex = digest.map(function (b) {
-    const value = (b + 256) % 256;
-    return ('0' + value.toString(16)).slice(-2);
-  }).join('');
-  Logger.log('API_KEY_SHA256=' + hex);
-  return hex;
-}

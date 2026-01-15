@@ -13,8 +13,9 @@ const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const functions = require('firebase-functions/v1');
+const { logger } = require('firebase-functions');
 const axios = require('axios');
+const functions = require('firebase-functions/v1');
 
 initializeApp();
 
@@ -906,13 +907,15 @@ exports.enqueueBookeoWebhook = bookeoRateLimiting.enqueueBookeoWebhook;
 exports.freshStartBookeo = bookeoRateLimiting.freshStartBookeo;
 exports.saveBookeoBlockId = bookeoRateLimiting.saveBookeoBlockId;
 exports.receiveBlockIdFromMake = bookeoRateLimiting.receiveBlockIdFromMake;
-exports.handleCalendarPaxUpdate = bookeoRateLimiting.handleCalendarPaxUpdate;
 
 
 // =========================================
 // APPS SCRIPT PROXY FUNCTIONS (SECURITY FIX C1)
 // =========================================
 // Añadir al final de functions/index.js
+
+const appsScriptUrl = defineSecret('APPS_SCRIPT_URL');
+const appsScriptKey = defineSecret('APPS_SCRIPT_API_KEY');
 
 // =========================================
 // PROXY 1: Validate Tour
@@ -922,59 +925,44 @@ exports.proxyValidateTour = functions.runWith({
 }).https.onCall(async (data, context) => {
   const auth = context.auth;
 
+  // Validar autenticación
   if (!auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+    throw new HttpsError('unauthenticated', 'Authentication required');
   }
 
+  // Validar role (manager o guide)
   const role = auth.token.role;
   if (role !== 'manager' && role !== 'guide') {
-    throw new functions.https.HttpsError('permission-denied', 'Invalid role');
+    throw new HttpsError('permission-denied', 'Invalid role');
   }
 
+  // Validar parámetros
   if (!data.fecha || !data.slot) {
-    throw new functions.https.HttpsError('invalid-argument', 'fecha and slot required');
+    throw new HttpsError('invalid-argument', 'fecha and slot required');
   }
 
   try {
-    const appsScriptUrl = (process.env.APPS_SCRIPT_URL || '').trim();
-    const apiKey = (process.env.APPS_SCRIPT_API_KEY || '').trim();
+    const url = `${process.env.APPS_SCRIPT_URL}?fecha=${data.fecha}&slot=${data.slot}&apiKey=${process.env.APPS_SCRIPT_API_KEY}`;
 
-    if (!appsScriptUrl.startsWith('https://')) {
-      throw new Error('Invalid APPS_SCRIPT_URL');
-    }
-
-    const url = `${appsScriptUrl}?fecha=${data.fecha}&slot=${data.slot}&apiKey=${apiKey}`;
-
-    functions.logger.info('Proxying validateTour', { fecha: data.fecha, slot: data.slot });
+    logger.info('Proxying validateTour', { fecha: data.fecha, slot: data.slot });
 
     const response = await axios.get(url, {
-      timeout: 30000,
-      headers: { 'Accept': 'application/json' }
+      headers: { 'Content-Type': 'application/json' }
     });
 
     const result = response.data;
 
     if (result.error) {
-      functions.logger.error('Apps Script business error', { result });
       throw new Error(result.message || 'Apps Script error');
     }
 
-    functions.logger.info('validateTour success', { exists: result.exists });
+    logger.info('validateTour success', { exists: result.exists });
+
     return result;
 
   } catch (error) {
-    const errorInfo = {
-      message: error.message,
-      stack: error.stack,
-    };
-
-    if (error.response) {
-      errorInfo.responseData = error.response.data;
-      errorInfo.responseStatus = error.response.status;
-    }
-
-    functions.logger.error('Error in proxyValidateTour', errorInfo);
-    throw new functions.https.HttpsError('internal', error.message);
+    logger.error('Error in proxyValidateTour', { error: error.message });
+    throw new HttpsError('internal', error.message);
   }
 });
 
@@ -987,53 +975,35 @@ exports.proxyAddGuideToEvent = functions.runWith({
   const auth = context.auth;
 
   if (!auth || auth.token.role !== 'manager') {
-    throw new functions.https.HttpsError('permission-denied', 'Manager only');
+    throw new HttpsError('permission-denied', 'Manager only');
   }
 
   if (!data.eventId || !data.guideEmail) {
-    throw new functions.https.HttpsError('invalid-argument', 'eventId and guideEmail required');
+    throw new HttpsError('invalid-argument', 'eventId and guideEmail required');
   }
 
   try {
-    const appsScriptUrl = (process.env.APPS_SCRIPT_URL || '').trim();
-    const apiKey = (process.env.APPS_SCRIPT_API_KEY || '').trim();
+    const url = `${process.env.APPS_SCRIPT_URL}?endpoint=addGuideToEvent&eventId=${data.eventId}&guideEmail=${encodeURIComponent(data.guideEmail)}&apiKey=${process.env.APPS_SCRIPT_API_KEY}`;
 
-    if (!appsScriptUrl.startsWith('https://')) {
-      throw new Error('Invalid APPS_SCRIPT_URL');
-    }
-
-    const url = `${appsScriptUrl}?endpoint=addGuideToEvent&eventId=${data.eventId}&guideEmail=${encodeURIComponent(data.guideEmail)}&apiKey=${apiKey}`;
-
-    functions.logger.info('Proxying addGuideToEvent', { eventId: data.eventId, guideEmail: data.guideEmail });
+    logger.info('Proxying addGuideToEvent', { eventId: data.eventId, guideEmail: data.guideEmail });
 
     const response = await axios.get(url, {
-      timeout: 30000,
-      headers: { 'Accept': 'application/json' }
+      headers: { 'Content-Type': 'application/json' }
     });
 
     const result = response.data;
 
     if (result.error) {
-      functions.logger.error('Apps Script business error', { result });
       throw new Error(result.message || 'Failed to add guide');
     }
 
-    functions.logger.info('addGuideToEvent success', { success: result.success });
+    logger.info('addGuideToEvent success', { success: result.success });
+
     return result;
 
   } catch (error) {
-    const errorInfo = {
-      message: error.message,
-      stack: error.stack,
-    };
-
-    if (error.response) {
-      errorInfo.responseData = error.response.data;
-      errorInfo.responseStatus = error.response.status;
-    }
-
-    functions.logger.error('Error in proxyAddGuideToEvent', errorInfo);
-    throw new functions.https.HttpsError('internal', error.message);
+    logger.error('Error in proxyAddGuideToEvent', { error: error.message });
+    throw new HttpsError('internal', error.message);
   }
 });
 
@@ -1046,53 +1016,35 @@ exports.proxyRemoveGuideFromEvent = functions.runWith({
   const auth = context.auth;
 
   if (!auth || auth.token.role !== 'manager') {
-    throw new functions.https.HttpsError('permission-denied', 'Manager only');
+    throw new HttpsError('permission-denied', 'Manager only');
   }
 
   if (!data.eventId || !data.guideEmail) {
-    throw new functions.https.HttpsError('invalid-argument', 'eventId and guideEmail required');
+    throw new HttpsError('invalid-argument', 'eventId and guideEmail required');
   }
 
   try {
-    const appsScriptUrl = (process.env.APPS_SCRIPT_URL || '').trim();
-    const apiKey = (process.env.APPS_SCRIPT_API_KEY || '').trim();
+    const url = `${process.env.APPS_SCRIPT_URL}?endpoint=removeGuideFromEvent&eventId=${data.eventId}&guideEmail=${encodeURIComponent(data.guideEmail)}&apiKey=${process.env.APPS_SCRIPT_API_KEY}`;
 
-    if (!appsScriptUrl.startsWith('https://')) {
-      throw new Error('Invalid APPS_SCRIPT_URL');
-    }
-
-    const url = `${appsScriptUrl}?endpoint=removeGuideFromEvent&eventId=${data.eventId}&guideEmail=${encodeURIComponent(data.guideEmail)}&apiKey=${apiKey}`;
-
-    functions.logger.info('Proxying removeGuideFromEvent', { eventId: data.eventId, guideEmail: data.guideEmail });
+    logger.info('Proxying removeGuideFromEvent', { eventId: data.eventId, guideEmail: data.guideEmail });
 
     const response = await axios.get(url, {
-      timeout: 30000,
-      headers: { 'Accept': 'application/json' }
+      headers: { 'Content-Type': 'application/json' }
     });
 
     const result = response.data;
 
     if (result.error) {
-      functions.logger.error('Apps Script business error', { result });
       throw new Error(result.message || 'Failed to remove guide');
     }
 
-    functions.logger.info('removeGuideFromEvent success', { success: result.success });
+    logger.info('removeGuideFromEvent success', { success: result.success });
+
     return result;
 
   } catch (error) {
-    const errorInfo = {
-      message: error.message,
-      stack: error.stack,
-    };
-
-    if (error.response) {
-      errorInfo.responseData = error.response.data;
-      errorInfo.responseStatus = error.response.status;
-    }
-
-    functions.logger.error('Error in proxyRemoveGuideFromEvent', errorInfo);
-    throw new functions.https.HttpsError('internal', error.message);
+    logger.error('Error in proxyRemoveGuideFromEvent', { error: error.message });
+    throw new HttpsError('internal', error.message);
   }
 });
 
@@ -1105,66 +1057,47 @@ exports.proxyGetEventDetails = functions.runWith({
   const auth = context.auth;
 
   if (!auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Authentication required');
+    throw new HttpsError('unauthenticated', 'Authentication required');
   }
 
   const role = auth.token.role;
   if (role !== 'manager' && role !== 'guide') {
-    throw new functions.https.HttpsError('permission-denied', 'Invalid role');
+    throw new HttpsError('permission-denied', 'Invalid role');
   }
 
   if (!data.eventId) {
-    throw new functions.https.HttpsError('invalid-argument', 'eventId required');
+    throw new HttpsError('invalid-argument', 'eventId required');
   }
 
   try {
-    const appsScriptUrl = (process.env.APPS_SCRIPT_URL || '').trim();
-    const apiKey = (process.env.APPS_SCRIPT_API_KEY || '').trim();
+    const url = `${process.env.APPS_SCRIPT_URL}?endpoint=getEventDetails&eventId=${data.eventId}&apiKey=${process.env.APPS_SCRIPT_API_KEY}`;
 
-    if (!appsScriptUrl.startsWith('https://')) {
-      throw new Error('Invalid APPS_SCRIPT_URL');
-    }
-
-    const url = `${appsScriptUrl}?endpoint=getEventDetails&eventId=${data.eventId}&apiKey=${apiKey}`;
-
-    functions.logger.info('Proxying getEventDetails', { eventId: data.eventId });
+    logger.info('Proxying getEventDetails', { eventId: data.eventId });
 
     const response = await axios.get(url, {
-      timeout: 30000,
-      headers: { 'Accept': 'application/json' }
+      headers: { 'Content-Type': 'application/json' }
     });
 
     const result = response.data;
 
     if (result.error) {
-      functions.logger.error('Apps Script business error', { result });
       const error = new Error(result.message);
       error.code = result.code;
-      throw error;
+      error.throw;
     }
 
-    functions.logger.info('getEventDetails success', { eventId: data.eventId });
+    logger.info('getEventDetails success', { eventId: data.eventId });
+
     return result;
 
   } catch (error) {
-    const errorInfo = {
-      message: error.message,
-      stack: error.stack,
-      code: error.code
-    };
-
-    if (error.response) {
-      errorInfo.responseData = error.response.data;
-      errorInfo.responseStatus = error.response.status;
-    }
-
-    functions.logger.error('Error in proxyGetEventDetails', errorInfo);
+    logger.error('Error in proxyGetEventDetails', { error: error.message, code: error.code });
 
     if (error.code === 'NOT_FOUND') {
-      throw new functions.https.HttpsError('not-found', 'Event not found');
+      throw new HttpsError('not-found', 'Event not found');
     }
 
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new HttpsError('internal', error.message);
   }
 });
 
@@ -1177,211 +1110,34 @@ exports.proxyGetAssignedTours = functions.runWith({
   const auth = context.auth;
 
   if (!auth || auth.token.role !== 'manager') {
-    throw new functions.https.HttpsError('permission-denied', 'Manager only');
+    throw new HttpsError('permission-denied', 'Manager only');
   }
 
   if (!data.startDate || !data.endDate) {
-    throw new functions.https.HttpsError('invalid-argument', 'startDate and endDate required');
-  }
-
-  if (!process.env.APPS_SCRIPT_URL) {
-    functions.logger.error('Missing APPS_SCRIPT_URL secret');
-    throw new functions.https.HttpsError('failed-precondition', 'Server configuration error [URL]');
+    throw new HttpsError('invalid-argument', 'startDate and endDate required');
   }
 
   try {
-    const appsScriptUrl = (process.env.APPS_SCRIPT_URL || '').trim();
-    const apiKey = (process.env.APPS_SCRIPT_API_KEY || '').trim();
+    const url = `${process.env.APPS_SCRIPT_URL}?endpoint=getAssignedTours&startDate=${data.startDate}&endDate=${data.endDate}&apiKey=${process.env.APPS_SCRIPT_API_KEY}`;
 
-    if (!appsScriptUrl.startsWith('https://')) {
-      functions.logger.error('Invalid APPS_SCRIPT_URL format', { url: appsScriptUrl });
-      throw new functions.https.HttpsError('failed-precondition', 'Invalid backend configuration [URL_FORMAT]');
-    }
+    logger.info('Proxying getAssignedTours', { startDate: data.startDate, endDate: data.endDate });
 
-    functions.logger.info('Proxying getAssignedTours', {
-      startDate: data.startDate,
-      endDate: data.endDate,
-      urlConfigured: !!appsScriptUrl,
-      apiKeyConfigured: !!apiKey
-    });
-
-    const response = await axios.get(appsScriptUrl, {
-      params: {
-        endpoint: 'getAssignedTours',
-        startDate: data.startDate,
-        endDate: data.endDate,
-        apiKey: apiKey
-      },
-      timeout: 30000,
+    const response = await axios.get(url, {
       headers: { 'Accept': 'application/json' }
     });
 
     const result = response.data;
 
     if (result.error) {
-      functions.logger.error('Apps Script business error', { result });
-      throw new Error(result.message || 'Apps Script error');
+      throw new Error(result.message || 'Error fetching assignments');
     }
 
-    functions.logger.info('getAssignedTours success', { count: result.assignments?.length || 0 });
+    logger.info('getAssignedTours success', { count: result.assignments?.length || 0 });
+
     return result;
 
   } catch (error) {
-    const errorInfo = {
-      message: error.message,
-      code: error.code,
-      stack: error.stack,
-    };
-
-    if (error.response) {
-      errorInfo.responseData = error.response.data;
-      errorInfo.responseStatus = error.response.status;
-      errorInfo.responseHeaders = error.response.headers;
-    }
-
-    functions.logger.error('Error in proxyGetAssignedTours', errorInfo);
-    throw new functions.https.HttpsError('internal', error.message || 'Internal proxy error');
-  }
-});
-
-// =========================================
-// PROXY 6: Get Unassigned Tours
-// =========================================
-exports.proxyGetUnassignedTours = functions.runWith({
-  secrets: ['APPS_SCRIPT_URL', 'APPS_SCRIPT_API_KEY']
-}).https.onCall(async (data, context) => {
-  const auth = context.auth;
-
-  if (!auth || (auth.token.role !== 'manager' && auth.token.role !== 'guide')) {
-    throw new functions.https.HttpsError('permission-denied', 'Manager or Guide only');
-  }
-
-  if (!data.startDate || !data.endDate) {
-    throw new functions.https.HttpsError('invalid-argument', 'startDate and endDate required');
-  }
-
-  if (!process.env.APPS_SCRIPT_URL) {
-    functions.logger.error('Missing APPS_SCRIPT_URL secret');
-    throw new functions.https.HttpsError('failed-precondition', 'Server configuration error [URL]');
-  }
-
-  try {
-    const appsScriptUrl = (process.env.APPS_SCRIPT_URL || '').trim();
-    const apiKey = (process.env.APPS_SCRIPT_API_KEY || '').trim();
-
-    functions.logger.info('Proxying getUnassignedTours', {
-      startDate: data.startDate,
-      endDate: data.endDate,
-      urlConfigured: !!appsScriptUrl
-    });
-
-    const response = await axios.get(appsScriptUrl, {
-      params: {
-        endpoint: 'getUnassignedTours',
-        startDate: data.startDate,
-        endDate: data.endDate,
-        apiKey: apiKey
-      },
-      timeout: 30000,
-      headers: { 'Accept': 'application/json' }
-    });
-
-    const result = response.data;
-
-    if (result.error) {
-      functions.logger.error('Apps Script business error', { result });
-      throw new Error(result.message || 'Apps Script error');
-    }
-
-    functions.logger.info('getUnassignedTours success', { count: result.tours?.length || 0 });
-    return result;
-
-  } catch (error) {
-    const errorInfo = {
-      message: error.message,
-      code: error.code,
-      stack: error.stack,
-    };
-
-    if (error.response) {
-      errorInfo.responseData = error.response.data;
-      errorInfo.responseStatus = error.response.status;
-      errorInfo.responseHeaders = error.response.headers;
-    }
-
-    functions.logger.error('Error in proxyGetUnassignedTours', errorInfo);
-    throw new functions.https.HttpsError('internal', error.message || 'Internal proxy error');
-  }
-});
-
-// =========================================
-// PROXY 7: Get Guide Assignment Count
-// =========================================
-exports.proxyGetGuideAssignmentCount = functions.runWith({
-  secrets: ['APPS_SCRIPT_URL', 'APPS_SCRIPT_API_KEY']
-}).https.onCall(async (data, context) => {
-  const auth = context.auth;
-
-  if (!auth || (auth.token.role !== 'manager' && auth.token.role !== 'guide')) {
-    throw new functions.https.HttpsError('permission-denied', 'Manager or Guide only');
-  }
-
-  if (!data.startDate || !data.endDate) {
-    throw new functions.https.HttpsError('invalid-argument', 'startDate and endDate required');
-  }
-
-  if (!process.env.APPS_SCRIPT_URL) {
-    functions.logger.error('Missing APPS_SCRIPT_URL secret');
-    throw new functions.https.HttpsError('failed-precondition', 'Server configuration error [URL]');
-  }
-
-  try {
-    const appsScriptUrl = (process.env.APPS_SCRIPT_URL || '').trim();
-    const apiKey = (process.env.APPS_SCRIPT_API_KEY || '').trim();
-
-    if (!appsScriptUrl.startsWith('https://')) {
-      throw new Error('Invalid APPS_SCRIPT_URL');
-    }
-
-    functions.logger.info('Proxying getGuideAssignmentCount', {
-      startDate: data.startDate,
-      endDate: data.endDate,
-      urlConfigured: !!appsScriptUrl
-    });
-
-    const response = await axios.get(appsScriptUrl, {
-      params: {
-        endpoint: 'getGuideAssignmentCount',
-        startDate: data.startDate,
-        endDate: data.endDate,
-        apiKey: apiKey
-      },
-      timeout: 30000,
-      headers: { 'Accept': 'application/json' }
-    });
-
-    const result = response.data;
-
-    if (result.error) {
-      functions.logger.error('Apps Script business error', { result });
-      throw new Error(result.message || 'Apps Script error');
-    }
-
-    functions.logger.info('getGuideAssignmentCount success', { guidesCount: Object.keys(result.counts || {}).length });
-    return result;
-
-  } catch (error) {
-    const errorInfo = {
-      message: error.message,
-      stack: error.stack,
-    };
-
-    if (error.response) {
-      errorInfo.responseData = error.response.data;
-      errorInfo.responseStatus = error.response.status;
-    }
-
-    functions.logger.error('Error in proxyGetGuideAssignmentCount', errorInfo);
-    throw new functions.https.HttpsError('internal', error.message || 'Internal proxy error');
+    logger.error('Error in proxyGetAssignedTours', { error: error.message });
+    throw new HttpsError('internal', error.message);
   }
 });

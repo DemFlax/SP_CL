@@ -263,7 +263,6 @@ async function generateGuideInvoicesForMonth(targetMonthDate, { notifyManager = 
         .where('guideId', '==', guideId)
         .where('fecha', '>=', startDate)
         .where('fecha', '<=', endDate)
-        .orderBy('fecha', 'desc')
         .get();
 
       if (costsSnap.empty) {
@@ -541,7 +540,6 @@ exports.refreshGuideInvoice = onCall({
       .where('guideId', '==', guideId)
       .where('fecha', '>=', startDate)
       .where('fecha', '<=', endDate)
-      .orderBy('fecha', 'desc')
       .get();
 
     if (costsSnap.empty) {
@@ -1574,6 +1572,8 @@ exports.checkMissingCosts = onSchedule({
 }, async (event) => {
   const DRY_RUN = false; // ENABLED REAL EMAILS
   const db = getFirestore();
+  const logger = require('firebase-functions').logger;
+
   logger.info('>>> START checkMissingCosts', { dryRun: DRY_RUN });
 
   try {

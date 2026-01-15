@@ -8,14 +8,18 @@
 
   <!-- PWA Meta Tags -->
   <meta name="theme-color" content="#334155">
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="demCalendar">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/assets/icon-192.png">
 
-  <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/css/tailwind-prod.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    }
+  </script>
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 
