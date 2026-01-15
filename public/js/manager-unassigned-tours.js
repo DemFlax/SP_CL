@@ -17,7 +17,8 @@ const functions = getFunctions(undefined, 'us-central1');
 
 let currentUser = null;
 let allGuides = [];
-let guideCounts = {};
+let guideCountsByMonth = {};
+let guideAvailability = {}; // { guideId: { 'YYYY-MM-DD_SLOT': status } }
 let allTours = [];
 
 onAuthStateChanged(auth, async (user) => {
@@ -34,11 +35,14 @@ async function init() {
         // Load guides from Firestore
         await loadGuides();
 
-        // Load unassigned tours and guide counts
+        // Load tours first so counts can be scoped per tour month
+        await loadUnassignedTours();
         await Promise.all([
-            loadUnassignedTours(),
-            loadGuideCounts()
+            loadGuideCounts(),
+            loadAvailability()
         ]);
+
+        renderTours();
     } catch (error) {
         console.error('Error initializing:', error);
         showToast('Error cargando datos', 'error');
@@ -60,7 +64,7 @@ async function loadGuides() {
 
 async function loadUnassignedTours() {
     const today = new Date().toISOString().split('T')[0];
-    const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const endDate = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const getUnassigned = httpsCallable(functions, 'proxyGetUnassignedTours');
     const result = await getUnassigned({ startDate: today, endDate });
@@ -74,22 +78,97 @@ async function loadUnassignedTours() {
 }
 
 async function loadGuideCounts() {
-    const today = new Date().toISOString().split('T')[0];
-    const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    guideCountsByMonth = {};
+    const monthKeys = getTourMonthKeys();
+
+    if (monthKeys.length === 0) {
+        return;
+    }
 
     const getCounts = httpsCallable(functions, 'proxyGetGuideAssignmentCount');
-    const result = await getCounts({ startDate: today, endDate });
-
-    guideCounts = result.data.counts || {};
-
-    // Ensure all guides have a count (even if 0)
-    allGuides.forEach(guide => {
-        if (!guideCounts[guide.email]) {
-            guideCounts[guide.email] = { email: guide.email, name: guide.nombre, count: 0 };
+    const requests = monthKeys.map(async (monthKey) => {
+        const range = getMonthRangeFromKey(monthKey);
+        if (!range) {
+            return;
         }
+
+        const result = await getCounts({
+            startDate: range.startDate,
+            endDate: range.endDate
+        });
+
+        const counts = result.data.counts || {};
+
+        // Ensure all guides have a count (even if 0)
+        allGuides.forEach(guide => {
+            if (!counts[guide.email]) {
+                counts[guide.email] = { email: guide.email, name: guide.nombre, count: 0 };
+            }
+        });
+
+        guideCountsByMonth[monthKey] = counts;
     });
 
-    renderTours();
+    await Promise.all(requests);
+}
+
+function getTourMonthKeys() {
+    const keys = new Set();
+    allTours.forEach(tour => {
+        if (tour.fecha && tour.fecha.length >= 7) {
+            keys.add(tour.fecha.slice(0, 7));
+        }
+    });
+    return Array.from(keys).sort();
+}
+
+function getMonthRangeFromKey(monthKey) {
+    const parts = String(monthKey).split('-');
+    if (parts.length !== 2) return null;
+    const year = Number(parts[0]);
+    const monthIndex = Number(parts[1]) - 1;
+    if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) return null;
+
+    const start = new Date(year, monthIndex, 1);
+    const end = new Date(year, monthIndex + 1, 0);
+    return {
+        startDate: formatDateLocal(start),
+        endDate: formatDateLocal(end)
+    };
+}
+
+function formatDateLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+async function loadAvailability() {
+    const today = new Date().toISOString().split('T')[0];
+    const endDate = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    guideAvailability = {};
+
+    // Iteramos por guías para leer sus shifts (evita problemas de permisos de collectionGroup)
+    const promises = allGuides.map(async (guide) => {
+        const shiftsQuery = query(
+            collection(db, 'guides', guide.id, 'shifts'),
+            where('fecha', '>=', today),
+            where('fecha', '<=', endDate)
+        );
+
+        const snapshot = await getDocs(shiftsQuery);
+        guideAvailability[guide.id] = {};
+
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const key = `${data.fecha}_${data.slot}`;
+            guideAvailability[guide.id][key] = data.estado;
+        });
+    });
+
+    await Promise.all(promises);
 }
 
 function renderTours() {
@@ -128,9 +207,17 @@ function createTourCard(tour) {
     const card = document.createElement('div');
     card.className = 'bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200 dark:border-gray-700';
 
-    // Create dropdown options with guide tour count
-    const guidesOptions = allGuides.map(guide => {
-        const count = guideCounts[guide.email]?.count || 0;
+    // Create dropdown options with guide tour count for the tour month - FILTERED BY AVAILABILITY
+    const tourKey = `${tour.fecha}_${tour.slot}`;
+    const tourMonthKey = (tour.fecha || '').slice(0, 7);
+    const availableGuides = allGuides.filter(guide => {
+        const status = guideAvailability[guide.id]?.[tourKey];
+        // Only show if LIBRE. If shift doesn't exist, we omit to be safe.
+        return status === 'LIBRE';
+    });
+
+    const guidesOptions = availableGuides.map(guide => {
+        const count = guideCountsByMonth[tourMonthKey]?.[guide.email]?.count || 0;
         return `<option value="${guide.id}">${guide.nombre} [${count}]</option>`;
     }).join('');
 

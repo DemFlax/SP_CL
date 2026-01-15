@@ -11,6 +11,78 @@ const SLOT_TIMES = {
 const VENDORS_SHEET_ID = '1Qre_IpEMsvjfzxLpOXsAPbHppEOxTIpi5MhofoUzFks';
 const ROOT_DRIVE_FOLDER_ID = '1CnDf9MdCqr9bzeyIfjOvfq3bAWckVZ6Y';
 const INVOICES_FOLDER_ID = '1NKpwoOvBPlXKI8dQCI9GlN9hYUrTMRP3';
+const BOOKEO_PAX_WEBHOOK_URL = 'https://us-central1-calendar-app-tours.cloudfunctions.net/handleCalendarPaxUpdate';
+const BOOKEO_PAX_THRESHOLD = 8;
+
+function onCalendarEventUpdated(e) {
+  try {
+    if (!e) return;
+
+    const eventId = e.calendarEventId || e.eventId;
+    if (!eventId) {
+      Logger.log('No eventId in trigger payload');
+      return;
+    }
+
+    const apiKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
+    if (!apiKey) {
+      Logger.log('Missing API_KEY for pax update');
+      return;
+    }
+
+    const event = Calendar.Events.get(CALENDAR_ID, eventId);
+    const guests = parseGuestsFromDescription(event.description);
+    let totalPax = 0;
+    guests.forEach(function (guest) {
+      if (guest.pax) {
+        totalPax += guest.pax;
+      }
+    });
+
+    if (!totalPax || totalPax <= BOOKEO_PAX_THRESHOLD) {
+      Logger.log('Pax update skipped (totalPax=' + totalPax + ')');
+      return;
+    }
+
+    sendPaxUpdateToBookeo_(eventId, totalPax, apiKey);
+  } catch (error) {
+    Logger.log('ERROR onCalendarEventUpdated: ' + error.toString());
+  }
+}
+
+function installBookeoPaxUpdateTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function (trigger) {
+    if (trigger.getHandlerFunction() === 'onCalendarEventUpdated') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  ScriptApp.newTrigger('onCalendarEventUpdated')
+    .forUserCalendar(CALENDAR_ID)
+    .onEventUpdated()
+    .create();
+}
+
+function sendPaxUpdateToBookeo_(eventId, totalPax, apiKey) {
+  const payload = JSON.stringify({
+    eventId: eventId,
+    totalPax: totalPax
+  });
+
+  const response = UrlFetchApp.fetch(BOOKEO_PAX_WEBHOOK_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: payload,
+    headers: { 'x-api-key': apiKey },
+    muteHttpExceptions: true
+  });
+
+  Logger.log('Bookeo pax update response: ' + response.getResponseCode());
+  if (response.getResponseCode() >= 400) {
+    Logger.log('Bookeo pax update error body: ' + response.getContentText());
+  }
+}
 
 function doGet(e) {
   Logger.log('=== doGet triggered ===');
@@ -46,6 +118,18 @@ function doGet(e) {
     return checkEventsStatus(e);
   }
 
+  if (endpoint === 'getUnassignedTours') {
+    return getUnassignedTours(e.parameter);
+  }
+
+  if (endpoint === 'getGuideAssignmentCount') {
+    return getGuideAssignmentCount(e.parameter);
+  }
+
+  if (endpoint === 'getApiKeyFingerprint') {
+    return getApiKeyFingerprintEndpoint(e);
+  }
+
   return validateTour(e);
 }
 
@@ -53,66 +137,63 @@ function doPost(e) {
   try {
     Logger.log('=== doPost triggered ===');
     const data = JSON.parse(e.postData.contents);
-    Logger.log(
-      'Parsed data - action: ' +
-      (data.action || 'none') +
-      ', endpoint: ' +
-      (data.endpoint || 'none')
-    );
+    Logger.log('Parsed data keys: ' + Object.keys(data).join(', '));
+    const action = (data.action || '').trim();
+    const endpoint = (data.endpoint || '').trim();
+    Logger.log('Normalized action: "' + action + '", endpoint: "' + endpoint + '"');
 
-    // ============================================
-    // VENDOR COSTS ENDPOINTS (OPTIMIZED)
-    // ============================================
-    if (data.endpoint === 'uploadSingleVendorTicket') {
+
+    // Use normalized variables
+    if (endpoint === 'uploadSingleVendorTicket') {
       return handleUploadSingleVendorTicket(data);
     }
 
-    if (data.endpoint === 'writeVendorCostsToSheet') {
+    if (endpoint === 'writeVendorCostsToSheet') {
       return handleWriteVendorCostsToSheet(data);
     }
 
     // Legacy endpoint (mantener por compatibilidad)
-    if (data.endpoint === 'uploadVendorTickets') {
+    if (endpoint === 'uploadVendorTickets') {
       return handleUploadVendorTickets(data);
     }
 
     // ============================================
     // INVOICES ENDPOINTS
     // ============================================
-    if (data.action === 'uploadGuideInvoice') {
+    if (action === 'uploadGuideInvoice') {
       return handleUploadGuideInvoice(data);
     }
 
-    if (data.action === 'deleteGuideInvoice') {
+    if (action === 'deleteGuideInvoice') {
       return handleDeleteGuideInvoice(data);
     }
 
-    if (data.action === 'uploadInvoice') {
+    if (action === 'uploadInvoice') {
       return handleUploadInvoice(data);
     }
 
     // ============================================
     // SYNC CANCELLATIONS ENDPOINT
     // ============================================
-    if (data.endpoint === 'checkEventsStatus') {
+    if (endpoint === 'checkEventsStatus') {
       return checkEventsStatus(data);
     }
 
-    // ============================================
-    // UNASSIGNED TOURS ENDPOINTS
-    // ============================================
-    if (data.action === 'getUnassignedTours') {
+    if (action === 'getAssignedTours') {
+      return getAssignedTours({ parameter: data });
+    }
+
+    if (action === 'getUnassignedTours') {
       return getUnassignedTours(data);
     }
 
-    if (data.action === 'getGuideAssignmentCount') {
+    if (action === 'getGuideAssignmentCount') {
       return getGuideAssignmentCount(data);
     }
 
     return buildResponse({
       error: true,
-      message:
-        'Unknown endpoint/action: ' + (data.endpoint || data.action)
+      message: 'Unknown endpoint/action [BV1]: ' + (endpoint || action)
     });
   } catch (error) {
     Logger.log('doPost ERROR: ' + error.toString());
@@ -122,6 +203,25 @@ function doPost(e) {
       message: error.toString()
     });
   }
+}
+
+
+function getApiKeyFingerprintEndpoint(e) {
+  const apiKey = (e.parameter || {}).apiKey;
+  const storedKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
+
+  if (!apiKey || apiKey !== storedKey) {
+    Logger.log('ERROR: Invalid API Key (fingerprint)');
+    return buildResponse({
+      error: true,
+      code: 'UNAUTHORIZED',
+      message: 'Invalid API key'
+    });
+  }
+
+  return buildResponse({
+    fingerprint: getApiKeyFingerprint()
+  });
 }
 
 // ============================================

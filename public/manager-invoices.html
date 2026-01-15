@@ -6,14 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Facturas - Manager</title>
 
-    <meta name="theme-color" content="#0ea5e9">
-    <link rel="manifest" href="/manifest.json">
-
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <script>
-        tailwind.config = { darkMode: 'class' }
-    </script>
+    <link rel="icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/css/tailwind-prod.css">
     <link rel="stylesheet" href="/css/styles.css">
 </head>
 
@@ -78,6 +72,15 @@
                     </svg>
                     <span>Asignaciones</span>
                 </a>
+                <a href="/manager-unassigned-tours.html"
+                    class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors group relative">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                        </path>
+                    </svg>
+                    <span>Pendientes</span>
+                </a>
                 <a href="/manager-guides.html"
                     class="flex items-center gap-2 px-4 py-2.5 bg-sky-700/30 hover:bg-sky-700/50 rounded-lg transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,6 +141,15 @@
                         </path>
                     </svg>
                     Asignaciones
+                </a>
+                <a href="/manager-unassigned-tours.html"
+                    class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg text-white font-medium">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                        </path>
+                    </svg>
+                    Pendientes
                 </a>
                 <a href="/manager-guides.html"
                     class="flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg text-white font-medium">
