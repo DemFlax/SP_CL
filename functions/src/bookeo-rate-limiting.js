@@ -15,7 +15,7 @@
 //        {"desbloqueo":"success","date":"YYYY/MM/DD","startTime":"HH:MM","fecha":"...","blockId":"..."}
 // 5) Callback actualiza/crea bookeo_blocks/{shiftId}
 //      - MAÑANA -> shiftId = YYYY-MM-DD_MAÑANA
-//      - TARDE -> shiftId = YYYY-MM-DD_T2   (TARDE se representa siempre como T2)
+//      - TARDE -> shiftId = YYYY-MM-DD_T1 / YYYY-MM-DD_T2 (T3 se mapea a T2)
 // =========================================
 
 const { onTaskDispatched } = require("firebase-functions/v2/tasks");
@@ -32,6 +32,7 @@ const crypto = require("crypto");
 // CONFIGURACIÓN
 // =========================================
 const brevoKey = defineSecret("BREVO_API_KEY");
+const appsScriptKey = defineSecret("APPS_SCRIPT_API_KEY");
 
 // URL Webhook Make
 const MAKE_WEBHOOK_URL =
@@ -55,7 +56,18 @@ const SLOT_TIMES = {
 const DEBOUNCE_SECONDS = 30;
 const MAX_CONCURRENT_REQUESTS = 6;
 const MAX_REQUESTS_PER_SECOND = 1.5;
-const TARDE_SLOTS = ["T1", "T2"];
+const TARDE_SLOTS = ["T1", "T2", "T3"];
+const CANONICAL_TARDE_SLOT = process.env.BOOKEO_SINGLE_TARDE_SLOT === "T1" ? "T1" : "T2";
+const BOOKEO_TARDE_SLOTS = [CANONICAL_TARDE_SLOT];
+const AFTERNOON_PAX_THRESHOLD = 8;
+const QUEUE_TTL_SECONDS = 600;
+const BLOCKED_STATUSES = new Set([
+  "BLOCKED",
+  "BLOCKED_PENDING_ID",
+  "BLOCKED_EXTERNAL",
+  "BLOCKED_EXTERNAL_PENDING_ID",
+]);
+const UNBLOCKING_STATUSES = new Set(["UNBLOCK_PENDING_CONFIRM"]);
 
 // =========================================
 // WORKER FUNCTION
@@ -78,13 +90,118 @@ exports.bookeoWebhookWorker = onTaskDispatched(
     secrets: [brevoKey],
   },
   async (req) => {
-    const { action, payload, shiftId, emailData } = req.data;
+    const { action, payload, shiftId, emailData, requestId } = req.data;
 
     logger.info("Procesando webhook Make", { action, shiftId, payload });
 
     const db = getFirestore();
 
     try {
+      if (shiftId) {
+        const queueRef = db.collection("bookeo_blocks").doc(shiftId);
+        const queueSnap = await queueRef.get();
+        const queueData = queueSnap.exists ? queueSnap.data() : null;
+        const queueState = getQueueState(queueData);
+        if (queueState.active && queueData && queueData.queuedAction) {
+          if (!requestId) {
+            logger.info("Skipping task without requestId (queue active)", {
+              shiftId,
+              action,
+            });
+            return {
+              success: true,
+              skipped: true,
+              reason: "queue_active_no_request_id",
+            };
+          }
+          if (queueData.queuedAction !== action) {
+            logger.info("Skipping task (queue action mismatch)", {
+              shiftId,
+              action,
+              queuedAction: queueData.queuedAction,
+            });
+            return {
+              success: true,
+              skipped: true,
+              reason: "queue_action_mismatch",
+            };
+          }
+          if (
+            queueData.queuedRequestId &&
+            queueData.queuedRequestId !== requestId
+          ) {
+            logger.info("Skipping task (queue request mismatch)", {
+              shiftId,
+              action,
+              requestId,
+            });
+            return {
+              success: true,
+              skipped: true,
+              reason: "queue_request_mismatch",
+            };
+          }
+        }
+      }
+
+      if (action === "BLOQUEAR") {
+        let evalResult;
+        try {
+          evalResult = await evaluateBlockRequest(db, shiftId);
+        } catch (evalError) {
+          logger.error("Error revalidating block request", {
+            shiftId,
+            error: evalError.message,
+          });
+          return { success: true, skipped: true, reason: "revalidation_failed" };
+        }
+
+        if (!evalResult.shouldBlock) {
+          logger.info("Skipping stale block request", {
+            shiftId,
+            reason: evalResult.reason,
+          });
+          await clearQueueForRequest(db, shiftId, requestId);
+          return { success: true, skipped: true, reason: evalResult.reason };
+        }
+
+        if (evalResult.isAlreadyBlocked) {
+          logger.info("Skipping block request (already blocked)", {
+            shiftId,
+            reason: evalResult.reason,
+          });
+          await clearQueueForRequest(db, shiftId, requestId);
+          return { success: true, skipped: true, reason: "already_blocked" };
+        }
+      }
+
+      if (action === "DESBLOQUEAR") {
+        let evalResult;
+        try {
+          evalResult = await evaluateBlockRequest(db, shiftId);
+        } catch (evalError) {
+          logger.error("Error revalidating unblock request", {
+            shiftId,
+            error: evalError.message,
+          });
+          return { success: true, skipped: true, reason: "revalidation_failed" };
+        }
+
+        if (!evalResult || evalResult.reason === "invalid_shift") {
+          await clearQueueForRequest(db, shiftId, requestId);
+          return { success: true, skipped: true, reason: "invalid_shift" };
+        }
+
+        if (evalResult.shouldBlock) {
+          logger.info("Skipping stale unblock request", {
+            shiftId,
+            reason: evalResult.reason,
+          });
+          await clearQueueForRequest(db, shiftId, requestId);
+          return { success: true, skipped: true, reason: "should_block" };
+        }
+      }
+
       let emailStatus = emailData ? "pending" : "not_requested";
 
       // 1. Llamada a Make
@@ -154,7 +271,9 @@ exports.bookeoWebhookWorker = onTaskDispatched(
             status: "BLOCKED",
             createdAt: FieldValue.serverTimestamp(),
             webhookResponse: responseData,
-          });
+            warning: FieldValue.delete(),
+            ...queueClearData(),
+          }, { merge: true });
           logger.info("✅ Bloqueo OK - ID guardado", { shiftId, blockId });
         } else {
           // Respuesta recibida pero SIN ID (ej: "Accepted")
@@ -176,6 +295,7 @@ exports.bookeoWebhookWorker = onTaskDispatched(
                   "Response was generic (e.g. Accepted). Waiting for Callback.",
                 createdAt: FieldValue.serverTimestamp(),
                 webhookResponse: responseData,
+                ...queueClearData(),
               },
               { merge: true }
             );
@@ -185,6 +305,7 @@ exports.bookeoWebhookWorker = onTaskDispatched(
           status: "UNBLOCK_PENDING_CONFIRM",
           unblockRequestedAt: FieldValue.serverTimestamp(),
           webhookResponse: responseData,
+          ...queueClearData(),
         };
 
         await db
@@ -222,7 +343,7 @@ exports.bookeoWebhookWorker = onTaskDispatched(
 /**
  * Mapea startTime (string) al slot interno.
  * MAÑANA -> "MAÑANA"
- * TARDE  -> siempre "T2" (tu doc de bloqueo de tarde es {fecha}_T2)
+ * TARDE  -> "T1" o "T2" (T3 se mapea a "T2")
  */
 function mapStartTimeToSlot(startTime) {
   if (!startTime) return null;
@@ -230,10 +351,18 @@ function mapStartTimeToSlot(startTime) {
 
   if (t === SLOT_TIMES["MAÑANA"]) return "MAÑANA";
 
-  if (t === SLOT_TIMES["T1"]) return "T1";
-  // T3 (19:15) lo tratamos como parte del bloque T2 por ahora si llega callback
-  if (t === SLOT_TIMES["T2"] || t === SLOT_TIMES["T3"]) return "T2";
+  // Tarde: todo se mapea al slot canónico configurado
+  if (t === SLOT_TIMES["T1"]) return CANONICAL_TARDE_SLOT;
+  if (t === SLOT_TIMES["T2"] || t === SLOT_TIMES["T3"]) return CANONICAL_TARDE_SLOT;
 
+  return null;
+}
+
+function getAlternateTardeSlot(slot) {
+  if (BOOKEO_TARDE_SLOTS.length < 2) return null;
+  if (slot === "T1") return "T2";
+  if (slot === "T2") return "T1";
+  if (slot === "T3") return "T2";
   return null;
 }
 
@@ -372,6 +501,7 @@ async function handleMakeCallback(req, res) {
       if (!isExternal) {
         const [fechaRaw, slot] = shiftId.split("_");
         let debeDesbloquear = false;
+        let hasAvailableGuides = false;
 
         if (slot === "MAÑANA") {
           const resultado = await calcularDisponibilidadSlot(
@@ -380,12 +510,14 @@ async function handleMakeCallback(req, res) {
             "MAÑANA"
           );
           debeDesbloquear = resultado.debeDesbloquear;
-        } else if (slot === "T2") {
+          hasAvailableGuides = resultado.availableCount > 0;
+        } else if (BOOKEO_TARDE_SLOTS.includes(slot)) {
           const resultadoTarde = await calcularDisponibilidadTarde(
             db,
             fechaRaw
           );
           debeDesbloquear = resultadoTarde.debeDesbloquear;
+          hasAvailableGuides = resultadoTarde.guidesDisponiblesTarde > 0;
         }
 
         if (debeDesbloquear) {
@@ -394,16 +526,15 @@ async function handleMakeCallback(req, res) {
             blockId,
           });
 
-          await enqueueWebhook({
-            action: "DESBLOQUEAR",
-            shiftId,
-            payload: {
-              accion: "desbloquear",
-              blockId,
-              shiftId,
-            },
-            emailData: null,
-          });
+          const dateForMake = fechaRaw.replace(/-/g, "/");
+          await processSlotBlocking(
+            db,
+            fechaRaw,
+            slot,
+            dateForMake,
+            false,
+            { hasAvailableGuides }
+          );
         }
       }
     }
@@ -422,6 +553,7 @@ async function handleMakeCallback(req, res) {
     logger.error("Error callback Make", e);
     return res.status(500).json({ success: false, error: e.message });
   }
+
 }
 
 // Endpoint oficial que usa Pablo (URL fija en Make/Postman)
@@ -437,6 +569,110 @@ exports.receiveBlockIdFromMake = onRequest(
 );
 
 // =========================================
+// CALENDAR PAX UPDATE -> BLOQUEO NUEVA TARDE
+// =========================================
+exports.handleCalendarPaxUpdate = onRequest(
+  { cors: true, region: "us-central1", secrets: [appsScriptKey] },
+  async (req, res) => {
+    if (req.method !== "POST") {
+      return res.status(405).json({ success: false, reason: "method_not_allowed" });
+    }
+
+    const body = req.body || {};
+    const apiKey = String(body.apiKey || req.get("x-api-key") || "");
+    if (!apiKey || apiKey !== appsScriptKey.value()) {
+      return res.status(401).json({ success: false, reason: "invalid_api_key" });
+    }
+
+    const eventId = body.eventId;
+    const totalPax = Number(body.totalPax ?? body.pax);
+
+    if (!eventId || !Number.isFinite(totalPax)) {
+      return res.status(400).json({ success: false, reason: "missing_event_or_pax" });
+    }
+
+    if (totalPax <= AFTERNOON_PAX_THRESHOLD) {
+      return res.json({ success: true, ignored: true, reason: "pax_below_threshold" });
+    }
+
+    const db = getFirestore();
+
+    try {
+      const assignedSnap = await db
+        .collectionGroup("shifts")
+        .where("eventId", "==", eventId)
+        .get();
+
+      const assignedDocs = assignedSnap.docs.filter(
+        doc => doc.data().estado === "ASIGNADO"
+      );
+
+      if (assignedDocs.length === 0) {
+        return res.json({ success: true, ignored: true, reason: "not_assigned" });
+      }
+
+      if (assignedDocs.length > 1) {
+        logger.warn("Multiple assigned shifts for eventId", { eventId, count: assignedDocs.length });
+      }
+
+      const assignedData = assignedDocs[0].data();
+      const fechaRaw = assignedData.fecha;
+      const assignedSlot = assignedData.slot;
+
+      if (!fechaRaw || !assignedSlot || !TARDE_SLOTS.includes(assignedSlot)) {
+        return res.json({ success: true, ignored: true, reason: "not_tarde" });
+      }
+
+      const targetSlot = getAlternateTardeSlot(assignedSlot);
+      if (!targetSlot) {
+        return res.json({ success: true, ignored: true, reason: "no_target_slot" });
+      }
+
+      const disponibilidad = await calcularDisponibilidadTarde(db, fechaRaw);
+      if (disponibilidad.guidesDisponiblesTarde > 0) {
+        return res.json({ success: true, ignored: true, reason: "guide_available" });
+      }
+
+      const targetAssigned = await slotTieneAsignado(db, fechaRaw, targetSlot);
+      if (targetAssigned) {
+        return res.json({ success: true, ignored: true, reason: "target_slot_assigned" });
+      }
+
+      const targetShiftId = `${fechaRaw}_${targetSlot}`;
+      await db.collection("bookeo_blocks").doc(targetShiftId).set({
+        paxBlocked: true,
+        paxBlockedAt: FieldValue.serverTimestamp(),
+        paxSource: {
+          eventId,
+          totalPax,
+          assignedSlot: assignedSlot,
+        },
+      }, { merge: true });
+
+      const dateForMake = fechaRaw.replace(/-/g, "/");
+      await processSlotBlocking(
+        db,
+        fechaRaw,
+        targetSlot,
+        dateForMake,
+        true,
+        { hasAvailableGuides: false }
+      );
+
+      return res.json({
+        success: true,
+        blocked: true,
+        fecha: fechaRaw,
+        targetSlot: targetSlot,
+      });
+    } catch (error) {
+      logger.error("Error handleCalendarPaxUpdate", { error: error.message, eventId });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// =========================================
 // TRIGGER (Monitor de Cambios)
 // =========================================
 exports.enqueueBookeoWebhook = onDocumentUpdated(
@@ -449,6 +685,7 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
     const before = event.data.before.data();
     const after = event.data.after.data();
     const shiftId = event.params.shiftId;
+    const guideId = event.params.guideId;
     const [fechaRaw] = shiftId.split("_");
     const slot = after.slot;
 
@@ -457,6 +694,20 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
     const db = getFirestore();
 
     try {
+      if (
+        TARDE_SLOTS.includes(slot) &&
+        (after.estado === "LIBRE" || after.estado === "NO_DISPONIBLE")
+      ) {
+        const fecha = after.fecha || fechaRaw;
+        await syncGuideAfternoonAvailability(
+          db,
+          guideId,
+          fecha,
+          after.estado,
+          slot
+        );
+      }
+
       const guidesSnapshot = await db
         .collection("guides")
         .where("estado", "==", "activo")
@@ -475,6 +726,8 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
         );
         const stateHash = calculateStateHash({
           total: totalGuides,
+          available: resultado.availableCount,
+          assigned: resultado.assignedCount,
           unavailable: resultado.unavailableCount,
         });
 
@@ -486,78 +739,14 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
             resultado
           )
         ) {
-          const blockDoc = await db
-            .collection("bookeo_blocks")
-            .doc(`${fechaRaw}_MAÑANA`)
-            .get();
-          const existingData = blockDoc.exists ? blockDoc.data() : {};
-          const realBookeoId = existingData.bookeoId;
-          const isBlocked =
-            blockDoc.exists &&
-            (existingData.status === "BLOCKED" ||
-              existingData.status === "BLOCKED_PENDING_ID");
-
-          if (resultado.debeBloquear && !isBlocked) {
-            // FIX: Verificar si existe tour antes de bloquear
-            const tieneTourMañana = await slotTieneTour(db, fechaRaw, "MAÑANA");
-            if (!tieneTourMañana) {
-              await enqueueWebhook({
-                action: "BLOQUEAR",
-                shiftId: `${fechaRaw}_MAÑANA`,
-                payload: {
-                  date: dateForMake,
-                  startTime: SLOT_TIMES["MAÑANA"],
-                  accion: "bloquear",
-                  shiftId: `${fechaRaw}_MAÑANA`,
-                },
-                emailData: {
-                  subject: `🚫 Bloqueo: ${fechaRaw} MAÑANA`,
-                  html: generarEmail(fechaRaw, "MAÑANA"),
-                },
-              });
-            } else {
-              logger.info("⏩ Bloqueo MAÑANA omitido - tour existente", { fecha: fechaRaw });
-            }
-          } else if (resultado.debeDesbloquear && isBlocked) {
-            if (realBookeoId && realBookeoId !== "Accepted") {
-              await enqueueWebhook({
-                action: "DESBLOQUEAR",
-                shiftId: `${fechaRaw}_MAÑANA`,
-                payload: {
-                  accion: "desbloquear",
-                  blockId: realBookeoId,
-                  shiftId: `${fechaRaw}_MAÑANA`,
-                },
-                emailData: null,
-              });
-              await db
-                .collection("bookeo_blocks")
-                .doc(`${fechaRaw}_MAÑANA_EMAIL_STATE`)
-                .delete()
-                .catch(() => { });
-            } else {
-              logger.error(
-                "⚠️ No se puede desbloquear MAÑANA: ID inválido o pendiente",
-                { fecha: fechaRaw, id: realBookeoId }
-              );
-            }
-          } else if (resultado.debeBloquear && isBlocked) {
-            // FIX: Auto-desbloquear si está bloqueado pero tiene tour existente
-            const tieneTourMañana = await slotTieneTour(db, fechaRaw, "MAÑANA");
-            if (tieneTourMañana && realBookeoId && realBookeoId !== "Accepted") {
-              logger.info("🔓 Auto-desbloqueando MAÑANA - tour existente detectado", { fecha: fechaRaw });
-              await enqueueWebhook({
-                action: "DESBLOQUEAR",
-                shiftId: `${fechaRaw}_MAÑANA`,
-                payload: {
-                  accion: "desbloquear",
-                  blockId: realBookeoId,
-                  shiftId: `${fechaRaw}_MAÑANA`,
-                },
-                emailData: null,
-              });
-            }
-          }
+          await processSlotBlocking(
+            db,
+            fechaRaw,
+            "MAÑANA",
+            dateForMake,
+            resultado.debeBloquear,
+            { hasAvailableGuides: resultado.availableCount > 0 }
+          );
         }
       }
 
@@ -565,11 +754,15 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
       else if (TARDE_SLOTS.includes(slot)) {
         const resultado = await calcularDisponibilidadTarde(db, fechaRaw);
         const available = resultado.guidesDisponiblesTarde; // Cantidad de guías libres
+        const assigned = resultado.guidesAsignadosTarde;
 
         // Usamos un hash único para el estado de "disponibilidad tarde"
+        const assignedSlotsKey = (resultado.assignedSlots || []).join(",");
         const stateHash = calculateStateHash({
           total: totalGuides,
           available: available,
+          assigned: assigned,
+          assignedSlots: assignedSlotsKey,
         });
 
         // Verificamos si CAMBIÓ la situación general de la tarde
@@ -581,25 +774,25 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
             resultado
           )
         ) {
-          // Evaluar T2 (18:15) - Se abre si hay al menos 1 guía
-          const shouldBlockT2 = available < 1;
-          await processSlotBlocking(
-            db,
-            fechaRaw,
-            "T2",
-            dateForMake,
-            shouldBlockT2
-          );
-
-          // Evaluar T1 (17:15) - Se abre si hay al menos 2 guías
-          const shouldBlockT1 = available < 2;
-          await processSlotBlocking(
-            db,
-            fechaRaw,
-            "T1",
-            dateForMake,
-            shouldBlockT1
-          );
+          const assignedSlots = resultado.assignedSlots || [];
+          const isSingleBookeoSlot = BOOKEO_TARDE_SLOTS.length === 1;
+          // If T3 is assigned and no extra guides, keep T1/T2 blocked (multi-slot only).
+          const blockDueToT3 =
+            !isSingleBookeoSlot && assignedSlots.includes("T3") && available === 0;
+          const shouldBlockTarde = resultado.debeBloquear;
+          for (const slotName of BOOKEO_TARDE_SLOTS) {
+            const isSlotAssigned = assignedSlots.includes(slotName);
+            const shouldBlockSlot =
+              !isSlotAssigned && (shouldBlockTarde || blockDueToT3);
+            await processSlotBlocking(
+              db,
+              fechaRaw,
+              slotName,
+              dateForMake,
+              shouldBlockSlot,
+              { hasAvailableGuides: available > 0 }
+            );
+          }
         }
       }
     } catch (error) {
@@ -608,87 +801,291 @@ exports.enqueueBookeoWebhook = onDocumentUpdated(
   }
 );
 
-async function processSlotBlocking(db, fechaRaw, slotName, dateForMake, shouldBlock) {
+
+async function processSlotBlocking(
+  db,
+  fechaRaw,
+  slotName,
+  dateForMake,
+  shouldBlock,
+  options = {}
+) {
   const shiftId = `${fechaRaw}_${slotName}`;
-  const blockDoc = await db.collection("bookeo_blocks").doc(shiftId).get();
-  const existingData = blockDoc.exists ? blockDoc.data() : {};
-  const realBookeoId = existingData.bookeoId;
+  const hasAvailableGuides =
+    options.hasAvailableGuides !== undefined ? options.hasAvailableGuides : true;
 
-  // Estado actual
-  const isBlocked =
-    blockDoc.exists &&
-    (existingData.status === "BLOCKED" ||
-      existingData.status === "BLOCKED_PENDING_ID");
+  const transactionResult = await db.runTransaction(async (t) => {
+    const ref = db.collection("bookeo_blocks").doc(shiftId);
+    const snap = await t.get(ref);
+    const existingData = snap.exists ? snap.data() : {};
+    const queueState = getQueueState(existingData);
+    const queuedAction = existingData.queuedAction;
 
-  if (shouldBlock && !isBlocked) {
-    // FIX: Verificar si existe tour antes de bloquear
-    const tieneTour = await slotTieneTour(db, fechaRaw, slotName);
-    if (!tieneTour) {
-      // BLOQUEAR
-      await enqueueWebhook({
-        action: "BLOQUEAR",
-        shiftId: shiftId,
-        payload: {
-          date: dateForMake,
-          startTime: SLOT_TIMES[slotName],
-          accion: "bloquear",
-          shiftId: shiftId,
-        },
-        emailData: {
-          subject: `🚫 Bloqueo: ${fechaRaw} ${slotName}`,
-          html: generarEmail(fechaRaw, slotName),
-        },
-      });
-    } else {
-      logger.info(`⏩ Bloqueo ${slotName} omitido - tour existente`, { fecha: fechaRaw, slot: slotName });
+    const isPaxBlocked = existingData.paxBlocked === true;
+    const keepPaxBlocked = isPaxBlocked && !hasAvailableGuides;
+    const effectiveShouldBlock = shouldBlock || keepPaxBlocked;
+
+    if (queueState.stale && queuedAction) {
+      t.set(ref, queueClearData(), { merge: true });
     }
-  } else if (!shouldBlock && isBlocked) {
-    // DESBLOQUEAR
-    if (realBookeoId && realBookeoId !== "Accepted") {
-      await enqueueWebhook({
+
+    const hasActiveBlockQueue = queueState.active && queuedAction === "BLOQUEAR";
+    const hasActiveUnblockQueue = queueState.active && queuedAction === "DESBLOQUEAR";
+    const isBlocked = isEffectivelyBlockedStatus(existingData.status);
+    const isBlockedStrict = isBlockedStatus(existingData.status);
+    const realBookeoId = existingData.bookeoId;
+
+    let enqueueAction = null;
+    let enqueueRequestId = null;
+    let unblockSkipped = false;
+
+    if (effectiveShouldBlock) {
+      if (hasActiveUnblockQueue) {
+        t.set(ref, queueClearData(), { merge: true });
+      }
+      if (!hasActiveBlockQueue && !isBlocked) {
+        enqueueRequestId = crypto.randomBytes(8).toString("hex");
+        t.set(
+          ref,
+          {
+            queuedAction: "BLOQUEAR",
+            queuedAt: FieldValue.serverTimestamp(),
+            queuedRequestId: enqueueRequestId,
+          },
+          { merge: true }
+        );
+        enqueueAction = "BLOQUEAR";
+      }
+    } else {
+      if (hasActiveBlockQueue) {
+        t.set(ref, queueClearData(), { merge: true });
+      }
+      if (!hasActiveUnblockQueue && isBlockedStrict) {
+        if (realBookeoId && realBookeoId !== "Accepted") {
+          enqueueRequestId = crypto.randomBytes(8).toString("hex");
+          t.set(
+            ref,
+            {
+              queuedAction: "DESBLOQUEAR",
+              queuedAt: FieldValue.serverTimestamp(),
+              queuedRequestId: enqueueRequestId,
+            },
+            { merge: true }
+          );
+          enqueueAction = "DESBLOQUEAR";
+        } else {
+          unblockSkipped = true;
+        }
+      }
+    }
+
+    if (isPaxBlocked && hasAvailableGuides) {
+      t.set(ref, {
+        paxBlocked: FieldValue.delete(),
+        paxBlockedAt: FieldValue.delete(),
+        paxSource: FieldValue.delete(),
+      }, { merge: true });
+    }
+
+    return {
+      enqueueAction,
+      enqueueRequestId,
+      realBookeoId,
+      unblockSkipped,
+    };
+  });
+
+  if (transactionResult.enqueueAction === "BLOQUEAR") {
+    const enqueued = await enqueueWebhook({
+      action: "BLOQUEAR",
+      shiftId: shiftId,
+      payload: {
+        date: dateForMake,
+        startTime: SLOT_TIMES[slotName],
+        accion: "bloquear",
+        shiftId: shiftId,
+      },
+      emailData: {
+        subject: `🚫 Bloqueo: ${fechaRaw} ${slotName}`,
+        html: generarEmail(fechaRaw, slotName),
+      },
+      requestId: transactionResult.enqueueRequestId,
+    });
+    if (!enqueued) {
+      await clearQueueForRequest(db, shiftId, transactionResult.enqueueRequestId);
+    }
+  } else if (transactionResult.enqueueAction === "DESBLOQUEAR") {
+    if (transactionResult.realBookeoId && transactionResult.realBookeoId !== "Accepted") {
+      const enqueued = await enqueueWebhook({
         action: "DESBLOQUEAR",
         shiftId: shiftId,
         payload: {
           accion: "desbloquear",
-          blockId: realBookeoId,
+          blockId: transactionResult.realBookeoId,
           shiftId: shiftId,
         },
         emailData: null,
+        requestId: transactionResult.enqueueRequestId,
       });
-      // Limpiar estado email si existiera (aunque usamos el hash general)
+      if (!enqueued) {
+        await clearQueueForRequest(db, shiftId, transactionResult.enqueueRequestId);
+        return;
+      }
       await db
         .collection("bookeo_blocks")
         .doc(`${fechaRaw}_${slotName}_EMAIL_STATE`)
         .delete()
         .catch(() => { });
-    } else {
-      logger.error(
-        `⚠️ No se puede desbloquear ${slotName}: ID inválido o pendiente`,
-        { fecha: fechaRaw, id: realBookeoId }
-      );
     }
-  } else if (shouldBlock && isBlocked) {
-    // FIX: Auto-desbloquear si está bloqueado pero tiene tour existente
-    const tieneTour = await slotTieneTour(db, fechaRaw, slotName);
-    if (tieneTour && realBookeoId && realBookeoId !== "Accepted") {
-      logger.info(`🔓 Auto-desbloqueando ${slotName} - tour existente detectado`, { fecha: fechaRaw, slot: slotName });
-      await enqueueWebhook({
-        action: "DESBLOQUEAR",
-        shiftId: shiftId,
-        payload: {
-          accion: "desbloquear",
-          blockId: realBookeoId,
-          shiftId: shiftId,
-        },
-        emailData: null,
-      });
-    }
+  } else if (transactionResult.unblockSkipped) {
+    logger.error(
+      `⚠️ No se puede desbloquear ${slotName}: ID inválido o pendiente`,
+      { fecha: fechaRaw, id: transactionResult.realBookeoId }
+    );
+  }
+}
+
+async function evaluateBlockRequest(db, shiftId) {
+  const [fechaRaw, slotName] = String(shiftId || "").split("_");
+  if (!fechaRaw || !slotName) {
+    return { shouldBlock: false, isAlreadyBlocked: false, reason: "invalid_shift" };
+  }
+
+  const blockDoc = await db.collection("bookeo_blocks").doc(shiftId).get();
+  const existingData = blockDoc.exists ? blockDoc.data() : {};
+  const isAlreadyBlocked = isEffectivelyBlockedStatus(existingData.status);
+
+  if (slotName === "MAÃANA") {
+    const resultado = await calcularDisponibilidadSlot(db, fechaRaw, "MAÃANA");
+    return {
+      shouldBlock: resultado.debeBloquear === true,
+      isAlreadyBlocked,
+      reason: resultado.debeBloquear ? "no_guides" : "guides_available_or_assigned",
+    };
+  }
+
+  if (!BOOKEO_TARDE_SLOTS.includes(slotName)) {
+    return { shouldBlock: false, isAlreadyBlocked, reason: "unsupported_slot" };
+  }
+
+  const resultadoTarde = await calcularDisponibilidadTarde(db, fechaRaw);
+  const available = resultadoTarde.guidesDisponiblesTarde;
+  const assignedSlots = resultadoTarde.assignedSlots || [];
+
+  if (assignedSlots.includes(slotName)) {
+    return { shouldBlock: false, isAlreadyBlocked, reason: "slot_assigned" };
+  }
+
+  const isSingleBookeoSlot = BOOKEO_TARDE_SLOTS.length === 1;
+  const blockDueToT3 =
+    !isSingleBookeoSlot && assignedSlots.includes("T3") && available === 0;
+  const blockDueToNoGuides = resultadoTarde.debeBloquear === true;
+  const paxBlocked = existingData.paxBlocked === true;
+  const blockDueToPax = paxBlocked && available === 0;
+  const shouldBlock = blockDueToNoGuides || blockDueToT3 || blockDueToPax;
+
+  let reason = "guides_available";
+  if (blockDueToPax) {
+    reason = "pax_blocked";
+  } else if (blockDueToT3) {
+    reason = "t3_assigned_no_guides";
+  } else if (blockDueToNoGuides) {
+    reason = "no_guides";
+  } else if (available === 0 && assignedSlots.length > 0) {
+    reason = "assigned_only";
+  }
+
+  return { shouldBlock, isAlreadyBlocked, reason };
+}
+
+async function syncGuideAfternoonAvailability(
+  db,
+  guideId,
+  fecha,
+  estado,
+  currentSlot
+) {
+  if (!guideId || !fecha) return;
+  if (!TARDE_SLOTS.includes(currentSlot)) return;
+  if (estado !== "LIBRE" && estado !== "NO_DISPONIBLE") return;
+
+  const otherSlots = TARDE_SLOTS.filter(slot => slot !== currentSlot);
+  const refs = otherSlots.map(slot =>
+    db.collection("guides").doc(guideId).collection("shifts").doc(`${fecha}_${slot}`)
+  );
+  const snaps = await db.getAll(...refs);
+
+  const batch = db.batch();
+  let hasUpdates = false;
+
+  snaps.forEach(snap => {
+    if (!snap.exists) return;
+    const data = snap.data();
+    if (data.estado === "ASIGNADO") return;
+    if (data.estado === estado) return;
+
+    batch.update(snap.ref, {
+      estado: estado,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    hasUpdates = true;
+  });
+
+  if (hasUpdates) {
+    await batch.commit();
   }
 }
 
 // =========================================
 // HELPERS
 // =========================================
+function isBlockedStatus(status) {
+  return BLOCKED_STATUSES.has(String(status || ""));
+}
+
+function isUnblockingStatus(status) {
+  return UNBLOCKING_STATUSES.has(String(status || ""));
+}
+
+function isEffectivelyBlockedStatus(status) {
+  return isBlockedStatus(status) || isUnblockingStatus(status);
+}
+
+function getQueueState(data) {
+  if (!data || !data.queuedAction) {
+    return { active: false, stale: false };
+  }
+  const queuedAt = data.queuedAt && typeof data.queuedAt.toDate === "function"
+    ? data.queuedAt.toDate().getTime()
+    : null;
+  if (!queuedAt) {
+    return { active: false, stale: true };
+  }
+  const ageMs = Date.now() - queuedAt;
+  const stale = ageMs > QUEUE_TTL_SECONDS * 1000;
+  return { active: !stale, stale, ageMs };
+}
+
+function queueClearData() {
+  return {
+    queuedAction: FieldValue.delete(),
+    queuedAt: FieldValue.delete(),
+    queuedRequestId: FieldValue.delete(),
+  };
+}
+
+async function clearQueueForRequest(db, shiftId, requestId) {
+  if (!shiftId || !requestId) return;
+  const ref = db.collection("bookeo_blocks").doc(shiftId);
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists) return;
+    const data = snap.data() || {};
+    if (data.queuedRequestId && data.queuedRequestId !== requestId) return;
+    t.set(ref, queueClearData(), { merge: true });
+  });
+}
+
 function calculateStateHash(obj) {
   return crypto
     .createHash("md5")
@@ -723,11 +1120,7 @@ async function checkAndSetEmailState(db, docId, valueToCheck) {
   });
 }
 
-/**
- * Verifica si algún guía tiene un tour asignado en un slot específico.
- * Si hay tour, no se debe bloquear ese slot en Bookeo porque ya existe reserva.
- */
-async function slotTieneTour(db, fecha, slot) {
+async function slotTieneAsignado(db, fecha, slot) {
   const guides = await db.collection("guides").where("estado", "==", "activo").get();
   if (guides.empty) return false;
 
@@ -736,14 +1129,9 @@ async function slotTieneTour(db, fecha, slot) {
   );
 
   const shiftSnaps = await db.getAll(...shiftRefs);
-
-  for (const shift of shiftSnaps) {
-    if (shift.exists && shift.data().estado === "ASIGNADO") {
-      logger.info("🔍 Tour detectado - NO se bloqueará", { fecha, slot, shiftId: shift.id });
-      return true;
-    }
-  }
-  return false;
+  return shiftSnaps.some(
+    snap => snap.exists && snap.data().estado === "ASIGNADO"
+  );
 }
 
 async function calcularDisponibilidadSlot(db, fecha, slot) {
@@ -752,7 +1140,15 @@ async function calcularDisponibilidadSlot(db, fecha, slot) {
     .where("estado", "==", "activo")
     .get();
 
-  if (snapshot.empty) return { unavailableCount: 0, debeBloquear: false, debeDesbloquear: false };
+  if (snapshot.empty) {
+    return {
+      unavailableCount: 0,
+      assignedCount: 0,
+      availableCount: 0,
+      debeBloquear: false,
+      debeDesbloquear: false,
+    };
+  }
 
   const shiftRefs = snapshot.docs.map(doc =>
     db.collection("guides").doc(doc.id).collection("shifts").doc(`${fecha}_${slot}`)
@@ -760,17 +1156,27 @@ async function calcularDisponibilidadSlot(db, fecha, slot) {
 
   const shiftSnaps = await db.getAll(...shiftRefs);
   let unavailableCount = 0;
+  let assignedCount = 0;
 
   for (const shift of shiftSnaps) {
-    if (shift.exists && (shift.data().estado === "NO_DISPONIBLE" || shift.data().estado === "ASIGNADO")) {
-      unavailableCount++;
+    if (shift.exists) {
+      if (shift.data().estado === "ASIGNADO") {
+        assignedCount++;
+      } else if (shift.data().estado === "NO_DISPONIBLE") {
+        unavailableCount++;
+      }
     }
   }
 
+  const availableCount =
+    snapshot.size - assignedCount - unavailableCount;
+
   return {
     unavailableCount,
-    debeBloquear: unavailableCount === snapshot.size,
-    debeDesbloquear: unavailableCount < snapshot.size,
+    assignedCount,
+    availableCount,
+    debeBloquear: availableCount === 0 && assignedCount === 0,
+    debeDesbloquear: availableCount > 0 || assignedCount > 0,
   };
 }
 
@@ -781,7 +1187,14 @@ async function calcularDisponibilidadTarde(db, fecha) {
     .get();
 
   if (snapshot.empty) {
-    return { guidesDisponiblesTarde: 0, debeBloquear: false, debeDesbloquear: false };
+    return {
+      guidesDisponiblesTarde: 0,
+      guidesAsignadosTarde: 0,
+      guidesBloqueadosTarde: 0,
+      assignedSlots: [],
+      debeBloquear: false,
+      debeDesbloquear: false,
+    };
   }
 
   const shiftRefs = [];
@@ -793,9 +1206,16 @@ async function calcularDisponibilidadTarde(db, fecha) {
 
   const shiftSnaps = await db.getAll(...shiftRefs);
 
-  // Agrupamos por guía para verificar si alguno de sus slots está bloqueado
+  // Agrupamos por guia para verificar si alguno de sus slots esta bloqueado
   const shiftsByGuide = {};
+  const assignedSlots = new Set();
   shiftSnaps.forEach(snap => {
+    if (snap.exists) {
+      const data = snap.data();
+      if (data.estado === "ASIGNADO" && TARDE_SLOTS.includes(data.slot)) {
+        assignedSlots.add(data.slot);
+      }
+    }
     // Extraemos guideId de la ruta del documento: guides/{guideId}/shifts/{shiftId}
     const pathParts = snap.ref.path.split('/');
     const guideId = pathParts[1];
@@ -804,33 +1224,48 @@ async function calcularDisponibilidadTarde(db, fecha) {
   });
 
   let blocked = 0;
+  let assigned = 0;
+  let available = 0;
   for (const guideId in shiftsByGuide) {
     const guideShifts = shiftsByGuide[guideId];
-    const isActuallyBlocked = guideShifts.some(snap =>
-      snap.exists && (snap.data().estado === "NO_DISPONIBLE" || snap.data().estado === "ASIGNADO")
+    const hasAssigned = guideShifts.some(
+      snap => snap.exists && snap.data().estado === "ASIGNADO"
     );
-    if (isActuallyBlocked) blocked++;
+    const hasBlocked = guideShifts.some(
+      snap => snap.exists && snap.data().estado === "NO_DISPONIBLE"
+    );
+    if (hasAssigned) {
+      assigned++;
+    } else if (hasBlocked) {
+      blocked++;
+    } else {
+      available++;
+    }
   }
 
-  const disp = snapshot.size - blocked;
   return {
-    guidesDisponiblesTarde: disp,
-    debeBloquear: disp === 0,
-    debeDesbloquear: disp > 0,
+    guidesDisponiblesTarde: available,
+    guidesAsignadosTarde: assigned,
+    guidesBloqueadosTarde: blocked,
+    assignedSlots: Array.from(assignedSlots).sort(),
+    debeBloquear: available === 0 && assigned === 0,
+    debeDesbloquear: available > 0 || assigned > 0,
   };
 }
 
-async function enqueueWebhook({ action, shiftId, payload, emailData }) {
+async function enqueueWebhook({ action, shiftId, payload, emailData, requestId }) {
   try {
     const queue = getFunctions().taskQueue(
       "locations/us-central1/functions/bookeoWebhookWorker"
     );
     await queue.enqueue(
-      { action, payload, shiftId, emailData },
+      { action, payload, shiftId, emailData, requestId },
       { scheduleDelaySeconds: DEBOUNCE_SECONDS }
     );
+    return true;
   } catch (e) {
     logger.error("Error encolando tarea Bookeo", e);
+    return false;
   }
 }
 
